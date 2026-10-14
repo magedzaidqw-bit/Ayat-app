@@ -367,6 +367,23 @@ tbody tr:hover { background:#fbfaf6; }
 .cp-t2{border-right-color:#8a96a3}
 .cp-t3{border-right-color:#b0703a}
 /* ===== الفرسان ===== */
+.qk-card{border:1.5px solid var(--gray2);border-radius:14px;padding:10px 12px;margin-bottom:10px;background:#fff}
+.qk-name{font-weight:800;color:var(--gd);margin-bottom:6px;font-size:14px}
+.qk-blk{border-right:4px solid;padding:4px 10px;margin-bottom:6px;background:#fafafa;border-radius:8px}
+.qk-lbl{font-size:12px;font-weight:800}.qk-lbl small{font-weight:400;color:var(--mid);margin-right:6px}
+.qk-in{display:grid;grid-template-columns:minmax(110px,1.6fr) 70px 70px auto;gap:6px;align-items:center;margin-top:4px}
+.qk-in select,.qk-in input{padding:7px 6px;border:1.5px solid var(--gray2);border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;width:100%}
+.qk-n{font-size:11px;font-weight:700;min-width:44px}
+.qk-ts{grid-column:1/-1;font-size:11px!important;color:var(--mid);padding:4px 6px!important}
+.qk-mq{float:left;width:auto!important;padding:2px 4px!important;font-size:11px!important}
+.qk-name{cursor:pointer}
+.qk-collapsed .qk-blk{display:none}.qk-collapsed{opacity:.75}
+.qk-badge{font-size:11px;font-weight:700;margin-right:6px;color:#b45309}
+.qk-card[data-state=filled]{border-color:#1d6b3a;background:#f3fbf5}.qk-card[data-state=filled] .qk-badge{color:#1d6b3a}
+.qk-card[data-state=done]{border-color:#14568f}.qk-card[data-state=done] .qk-badge{color:#14568f}
+.qk-card[data-state=absent]{opacity:.6;background:#f3f3f3}.qk-card[data-state=absent] .qk-badge{color:#777}
+.qk-card[data-state=todo]{border-color:#e0b26a}
+@media (max-width:520px){.qk-in{grid-template-columns:1fr 1fr 1fr}.qk-in select{grid-column:1/-1}}
 .fr-hero{background:linear-gradient(135deg,var(--gd),var(--gm));border-radius:22px;padding:26px 18px 56px;text-align:center;color:#fff;border-bottom:4px solid var(--gold)}
 .fr-orn{color:var(--gold);letter-spacing:8px;font-size:15px}
 .fr-verse{font-family:'Amiri',serif;color:var(--gold2);font-size:19px;margin:6px 0}
@@ -1320,6 +1337,8 @@ function buildPages() {
   <div class="page" id="p-memorization">
     <div class="stitle">📖 سجل الحفظ والمراجعة</div>
     <div style="margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+      <button class="btn" onclick="openQuick()" style="background:linear-gradient(135deg,#C9A961,#1a5230);color:white;border:none;padding:14px 26px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:16px;font-weight:900;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.25)">⚡ تسجيل سريع للحلقة (حفظ + مراجعة)</button>
+      <details style="display:inline-block"><summary style="cursor:pointer;font-size:12px;color:var(--mid);padding:8px 6px;font-weight:700">طرق أخرى للتسجيل ▾</summary><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
       <!-- مجموعة الحفظ -->
       <div style="display:inline-flex;gap:4px;background:#e8f5e9;border:1.5px solid #2d6262;border-radius:12px;padding:4px">
         <button class="btn" onclick="openMemoM('hifz')" style="background:#2d6262;color:white;border:none;padding:8px 14px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer">📖 حفظ فردي</button>
@@ -1330,6 +1349,7 @@ function buildPages() {
         <button class="btn" onclick="openMemoM('muraja')" style="background:#14568f;color:white;border:none;padding:8px 14px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer">🔄 مراجعة فردية</button>
         <button class="btn" onclick="openBulkReview()" style="background:#1a6bab;color:white;border:none;padding:8px 14px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer">🔁 مراجعة جماعية</button>
       </div>
+      </div></details>
       <select id="memo-circle" class="btn-o" onchange="loadMemo()" style="min-width:140px"><option value="">جميع الحلقات</option></select>
     </div>
     <div class="card"><div class="ch"><h3>سجل الحفظ والمراجعة</h3><button class="btn btn-o btn-sm" onclick="printMemoHistory()">🖨️ طباعة كشف الحلقة</button></div><div class="cb"><div class="tw"><table id="memo-body-table"><thead><tr><th>الطالب</th><th>النوع</th><th>من</th><th>إلى</th><th>الآيات</th><th>الإتقان</th><th>التاريخ</th><th>إجراءات</th></tr></thead><tbody id="memo-body"></tbody></table></div></div></div>
@@ -1577,6 +1597,43 @@ function buildModals() {
     <button class="btn-pri" onclick="saveStudent()">حفظ</button>
   </div></div></div>
 
+  <div class="mo" id="m-quick"><div class="modal" style="max-width:760px"><div class="mh"><h3>⚡ تسجيل سريع للحلقة</h3><button class="mc" onclick="quickClose()">✕</button></div>
+  <div class="mb">
+    <div class="fgrid">
+      <div class="fg"><label>الحلقة</label><select id="qk-circle" onchange="quickLoad()"></select></div>
+      <div class="fg"><label>التاريخ</label><input type="date" id="qk-date" onchange="quickStatus()"></div>
+    </div>
+    <div class="fg"><label>اتجاه الحفظ (يحدّد السورة التالية تلقائياً)</label>
+      <select id="qk-dir" onchange="quickDirChange()"><option value="desc">تنازلي — نظام المركز: من الناس نحو البقرة (الفلق بعد الناس…)</option><option value="asc">تصاعدي — من الفاتحة (البقرة بعد الفاتحة…)</option></select></div>
+    <div style="background:#e3f3e8;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#1d6b3a">
+      السورة وآية البداية معبّأتان تلقائياً من آخر نقطة لكل طالب. اكتب فقط آية <strong>"إلى"</strong> لمن حفظ أو راجع، ثم اضغط <strong>حفظ</strong>. يمكنك تسجيل الطلاب على دفعات أثناء الحلقة؛ تبقى الشاشة مفتوحة ويُنزَل من سُجّل له لأسفل القائمة.
+    </div>
+    <details style="margin-bottom:10px;border:1.5px dashed var(--gold);border-radius:10px;padding:8px 12px">
+      <summary style="cursor:pointer;font-weight:800;font-size:13px">📚 تطبيق نفس المقطع على كل طلاب الحلقة</summary>
+      <div style="margin-top:8px">
+        <div class="fgrid">
+          <div class="fg"><label>النوع</label><select id="qk-ap-kind"><option value="hifz">📖 حفظ</option><option value="muraja">🔄 مراجعة</option></select></div>
+          <div class="fg"><label>من سورة</label><select id="qk-ap-s"></select></div>
+        </div>
+        <div class="fgrid">
+          <div class="fg"><label>من آية</label><input type="number" id="qk-ap-f" min="1" value="1"></div>
+          <div class="fg"><label>إلى سورة (اتركها فارغة إن كانت نفسها)</label><select id="qk-ap-ts"></select></div>
+        </div>
+        <div class="fg"><label>إلى آية</label><input type="number" id="qk-ap-t" min="1"></div>
+        <button class="btn btn-o" onclick="quickApplyAll()">تطبيق على الجميع</button>
+        <small style="display:block;margin-top:6px;color:var(--mid)">يملأ الحقول لكل الطلاب، وبعدها يمكنك تعديل أي طالب أو مسح آية "إلى" لمن لم يحضر.</small>
+      </div>
+    </details>
+    <div id="qk-summary" style="position:sticky;top:0;z-index:2;background:#fff;padding:8px 4px;border-bottom:1px solid var(--gray2);font-size:13px;font-weight:700;margin-bottom:8px"></div>
+    <div id="qk-rows"></div>
+    <div style="position:sticky;bottom:0;background:#fff;padding:10px 0;margin-top:10px;border-top:1px solid var(--gray2)">
+      <div id="qk-toast" style="display:none;background:#e3f3e8;color:#1d6b3a;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:700"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-pri" id="qk-save" onclick="quickSave()" style="flex:2">💾 حفظ ما أُدخل (والاستمرار)</button>
+        <button class="btn btn-o" onclick="quickFinish()" style="flex:1">✅ إنهاء التسجيل</button>
+      </div>
+    </div>
+  </div></div></div>
   <div class="mo" id="m-memo"><div class="modal"><div class="mh"><h3 id="memo-title">تسجيل حفظ</h3><button class="mc" onclick="closeM('m-memo')">✕</button></div>
   <div class="mb">
     <input type="hidden" id="memo-type">
@@ -3285,14 +3342,249 @@ async function saveBulkHifz() {
   const mastery=document.getElementById('bulk-m').value;
   if (!date||!sf||!af||!st||!at) { alert('يرجى تعبئة جميع الحقول'); return; }
   if (date > today()) { alert('⛔ لا يمكن تسجيل حفظ بتاريخ في المستقبل. تأكد من اليوم والشهر في التاريخ.'); return; }
+  const _bN = countVerses(sf, parseInt(af), st, parseInt(at));
+  if (_bN <= 0) { alert('⛔ ترتيب الآيات غير صحيح: بداية المقطع يجب أن تسبق نهايته. راجع السورة والآية.'); return; }
+  if (_bN > 300 && !confirm('المقطع المسجّل كبير جداً (' + _bN + ' آية). هل هو صحيح؟')) return;
   const checked=[...document.querySelectorAll('#bulk-students input[type=checkbox]:checked')];
   if (!checked.length) { alert('يرجى اختيار طالب واحد على الأقل'); return; }
-  const rows=checked.map(cb=>({student_id:cb.value,date,surah_from:sf,ayah_from:parseInt(af),surah_to:st,ayah_to:parseInt(at),verses_count:verses,mastery,recorded_by:CU.id}));
+  const rows=checked.map(cb=>({student_id:cb.value,date,surah_from:sf,ayah_from:parseInt(af),surah_to:st,ayah_to:parseInt(at),verses_count:_bN,mastery,recorded_by:CU.id}));
   const {error}=await sb.from('memorization_log').insert(rows);
   if (error) { alert('خطأ: '+error.message); return; }
   alert('✅ تم تسجيل الحفظ لـ '+rows.length+' طالب');
   closeM('m-bulk-hifz'); loadMemo();
 }
+// ===================== التسجيل السريع للحلقة (حفظ + مراجعة لكل الطلاب في شاشة واحدة) =====================
+let _qk = { students: [], last: {} };
+function qkDir() { try { return localStorage.getItem('qk_dir') || 'desc'; } catch(e) { return 'desc'; } }
+function qkNext(surahName, ayahTo, dir) {
+  const s = SURAHS.find(x => x.name === surahName);
+  if (!s) return null;
+  if (ayahTo < s.v) return { surah: s.name, ayah: ayahTo + 1 };
+  const n = dir === 'desc' ? s.n - 1 : s.n + 1;
+  const t = SURAHS.find(x => x.n === n);
+  return t ? { surah: t.name, ayah: 1 } : { surah: s.name, ayah: s.v };
+}
+async function openQuick() {
+  const sel = document.getElementById('qk-circle');
+  document.getElementById('qk-date').value = today();
+  document.getElementById('qk-date').max = today();
+  document.getElementById('qk-dir').value = qkDir();
+  document.getElementById('qk-ap-s').innerHTML = SURAHS.map(x => `<option value="${x.name}">${x.n}. ${x.name}</option>`).join('');
+  document.getElementById('qk-ap-ts').innerHTML = '<option value="">نفس السورة</option>' + SURAHS.map(x => `<option value="${x.name}">${x.n}. ${x.name}</option>`).join('');
+  document.getElementById('qk-rows').innerHTML = '<div style="color:#999;padding:20px;text-align:center">جاري التحميل...</div>';
+  openM('m-quick');
+  let q = sb.from('circles').select('id,name').order('name');
+  if (CP.role === 'teacher') q = q.eq('teacher_id', CU.id);
+  const { data: cs } = await q;
+  sel.innerHTML = (cs||[]).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  const pre = document.getElementById('memo-circle')?.value;
+  if (pre && (cs||[]).some(c => c.id === pre)) sel.value = pre;
+  if (!(cs||[]).length) { document.getElementById('qk-rows').innerHTML = '<div style="color:#999;padding:20px;text-align:center">لا توجد حلقات</div>'; return; }
+  await quickLoad();
+}
+function quickDirChange() {
+  try { localStorage.setItem('qk_dir', v('qk-dir')); } catch(e) {}
+  quickRender();
+}
+async function quickLoad() {
+  const cid = v('qk-circle');
+  const box = document.getElementById('qk-rows');
+  box.innerHTML = '<div style="color:#999;padding:20px;text-align:center">جاري تحميل الطلاب...</div>';
+  const { data: studs } = await sb.from('students').select('id,full_name').eq('circle_id', cid).order('full_name');
+  _qk.students = studs || [];
+  _qk.last = { hifz: {}, muraja: {} }; _qk.sess = new Set();
+  if (_qk.students.length) {
+    const ids = _qk.students.map(s => s.id);
+    const get = (tbl) => fetchAllRows(() => sb.from(tbl).select('student_id,surah_to,ayah_to,date,created_at').in('student_id', ids).lte('date', today()).order('date',{ascending:false}).order('created_at',{ascending:false}));
+    try {
+      const [h, m] = await Promise.all([get('memorization_log'), get('review_log')]);
+      h.forEach(r => { if (!_qk.last.hifz[r.student_id]) _qk.last.hifz[r.student_id] = r; });
+      m.forEach(r => { if (!_qk.last.muraja[r.student_id]) _qk.last.muraja[r.student_id] = r; });
+    } catch(e) { /* نعرض الشاشة حتى لو تعذّر جلب آخر نقطة */ }
+  }
+  quickRender();
+}
+function quickRender() {
+  const box = document.getElementById('qk-rows');
+  if (!_qk.students.length) { box.innerHTML = '<div style="color:#999;padding:20px;text-align:center">لا يوجد طلاب في هذه الحلقة</div>'; return; }
+  const dir = v('qk-dir') || 'asc';
+  const opts = '<option value="">—</option>' + SURAHS.map(s => `<option value="${s.name}">${s.n}. ${s.name}</option>`).join('');
+  const optsTo = '<option value="">↔ إن انتهى في سورة أخرى، اخترها هنا</option>' + SURAHS.map(s => `<option value="${s.name}">إلى سورة ${s.name}</option>`).join('');
+  const block = (kind, sid, label, color) => {
+    const last = _qk.last[kind][sid];
+    let nx = last ? qkNext(last.surah_to, last.ayah_to, dir) : null;
+    if (!last && kind === 'hifz') nx = dir === 'desc' ? { surah: 'الناس', ayah: 1 } : { surah: 'الفاتحة', ayah: 1 };
+    const lastTxt = last ? `آخر نقطة: ${last.surah_to} ${last.ayah_to}` : 'لا يوجد تسجيل سابق';
+    return `<div class="qk-blk" style="border-color:${color}">
+      <div class="qk-lbl" style="color:${color}">${label} <small id="qk-last-${kind}-${sid}">${lastTxt}</small>
+        <select id="qk-${kind==='hifz'?'mh':'mm'}-${sid}" class="qk-mq" title="تقدير ${kind==='hifz'?'الحفظ':'المراجعة'}"><option value="good">✅ جيد</option><option value="excellent">⭐ ممتاز</option><option value="needs_review">🔄 يحتاج مراجعة</option><option value="weak">⚠️ ضعيف</option></select></div>
+      <div class="qk-in">
+        <select id="qk-${kind}-s-${sid}" onchange="quickSurahChange('${kind}','${sid}')">${opts.replace(`value="${nx?nx.surah:'__'}"`, `value="${nx?nx.surah:''}" selected`)}</select>
+        <input type="number" inputmode="numeric" min="1" id="qk-${kind}-f-${sid}" placeholder="من" value="${nx?nx.ayah:''}" oninput="quickCnt('${kind}','${sid}')">
+        <input type="number" inputmode="numeric" min="1" id="qk-${kind}-t-${sid}" placeholder="إلى" oninput="quickCnt('${kind}','${sid}')">
+        <span class="qk-n" id="qk-${kind}-n-${sid}"></span>
+        <select id="qk-${kind}-ts-${sid}" class="qk-ts" onchange="quickCnt('${kind}','${sid}')" title="اتركها كما هي إن كان المقطع داخل سورة واحدة. وإن انتهى في سورة أخرى فاخترها، وستكون خانة (إلى) هي آية النهاية فيها">${optsTo}</select>
+      </div></div>`;
+  };
+  box.innerHTML = _qk.students.map(s => `<div class="qk-card" id="qk-card-${s.id}" oninput="quickMark()" onchange="quickMark()">
+    <div class="qk-name" onclick="this.parentElement.classList.toggle('qk-collapsed')">${escapeHtml(s.full_name)} <span class="qk-badge" id="qk-badge-${s.id}"></span></div>
+    ${block('hifz', s.id, '📖 حفظ', '#1a5230')}
+    ${block('muraja', s.id, '🔄 مراجعة', '#14568f')}
+  </div>`).join('');
+  quickStatus();
+}
+// حالة اليوم: من غاب، ومن سُجّل له بالفعل، ومن لم يُسجَّل بعد (لتفادي نسيان طالب سمّع)
+async function quickStatus() {
+  const date = v('qk-date'); const ids = _qk.students.map(s => s.id);
+  _qk.absent = new Set(); _qk.done = new Set();
+  if (ids.length && date) {
+    try {
+      const [a, h, m] = await Promise.all([
+        sb.from('attendance').select('student_id,status').eq('date', date).in('student_id', ids),
+        sb.from('memorization_log').select('student_id').eq('date', date).in('student_id', ids),
+        sb.from('review_log').select('student_id').eq('date', date).in('student_id', ids)
+      ]);
+      (a.data||[]).forEach(x => { if (x.status === 'absent' || x.status === 'excused') _qk.absent.add(x.student_id); });
+      (h.data||[]).forEach(x => _qk.done.add(x.student_id));
+      (m.data||[]).forEach(x => _qk.done.add(x.student_id));
+    } catch(e) {}
+  }
+  quickMark();
+}
+function quickFilled(sid) { return !!(v(`qk-hifz-t-${sid}`) || v(`qk-muraja-t-${sid}`)); }
+function quickMark() {
+  let filled = 0, done = 0, absent = 0, todo = 0;
+  _qk.students.forEach(st => {
+    const card = document.getElementById(`qk-card-${st.id}`), bd = document.getElementById(`qk-badge-${st.id}`);
+    if (!card) return;
+    const f = quickFilled(st.id), isAbs = _qk.absent && _qk.absent.has(st.id), isDone = _qk.done && _qk.done.has(st.id);
+    let state = 'todo', txt = '';
+    if (f) { state = 'filled'; txt = '✔ جاهز للحفظ'; filled++; }
+    else if (isDone) { state = 'done'; txt = '✔ سُجّل اليوم سابقاً'; done++; }
+    else if (isAbs) { state = 'absent'; txt = 'غائب'; absent++; }
+    else { txt = 'لم يُسجَّل بعد'; todo++; }
+    card.dataset.state = state; bd.textContent = txt;
+  });
+  const el = document.getElementById('qk-summary');
+  if (el) el.innerHTML = `<span style="color:#1d6b3a">✔ ${filled} جاهز</span> · <span style="color:#14568f">${done} سُجّل سابقاً</span> · <span style="color:#777">${absent} غائب</span> · <span style="color:${todo?'#b45309':'#1d6b3a'};font-weight:800">${todo} لم يُسجَّل بعد</span>`;
+}
+function qkSegments(sName, f, tsName, t) {
+  const A = SURAHS.find(x => x.name === sName), B = tsName ? SURAHS.find(x => x.name === tsName) : A;
+  if (!A || !B || !f || !t) return null;
+  if (A.n === B.n) return (f < 1 || t < f || t > A.v) ? null : [{ s: A, f, t }];
+  const step = B.n > A.n ? 1 : -1, out = [];
+  for (let n = A.n; ; n += step) {
+    const S = SURAHS[n - 1], first = n === A.n, last = n === B.n;
+    const ff = first ? f : 1, tt = last ? t : S.v;
+    if (ff < 1 || ff > S.v || tt < 1 || tt > S.v || tt < ff) return null;
+    out.push({ s: S, f: ff, t: tt });
+    if (last) break;
+  }
+  return out;
+}
+function quickSurahChange(kind, sid) {
+  const s = SURAHS.find(x => x.name === v(`qk-${kind}-s-${sid}`));
+  const f = document.getElementById(`qk-${kind}-f-${sid}`);
+  if (s) f.value = 1;
+  quickCnt(kind, sid);
+}
+function quickCnt(kind, sid) {
+  const el = document.getElementById(`qk-${kind}-n-${sid}`);
+  const t = parseInt(v(`qk-${kind}-t-${sid}`));
+  if (!t) { el.textContent = ''; return; }
+  const seg = qkSegments(v(`qk-${kind}-s-${sid}`), parseInt(v(`qk-${kind}-f-${sid}`)), v(`qk-${kind}-ts-${sid}`), t);
+  if (!seg) { el.textContent = '⚠️'; el.style.color = '#b3261e'; return; }
+  el.textContent = seg.reduce((n, x) => n + x.t - x.f + 1, 0) + ' آية';
+  el.style.color = '#1d6b3a';
+}
+function quickApplyAll() {
+  const kind = v('qk-ap-kind'), sName = v('qk-ap-s'), f = parseInt(v('qk-ap-f')), t = parseInt(v('qk-ap-t')), ts = v('qk-ap-ts');
+  if (!qkSegments(sName, f, ts, t)) { alert('⛔ تحقق من المقطع: السورة وآية البداية وآية النهاية.'); return; }
+  _qk.students.forEach(st => {
+    document.getElementById(`qk-${kind}-s-${st.id}`).value = sName;
+    document.getElementById(`qk-${kind}-f-${st.id}`).value = f;
+    document.getElementById(`qk-${kind}-ts-${st.id}`).value = ts;
+    document.getElementById(`qk-${kind}-t-${st.id}`).value = t;
+    quickCnt(kind, st.id);
+  });
+  quickMark();
+}
+async function quickSave() {
+  const date = v('qk-date');
+  if (!date) { alert('اختر التاريخ'); return; }
+  if (date > today()) { alert('⛔ لا يمكن التسجيل بتاريخ في المستقبل.'); return; }
+  const hifz = [], mur = [], pts = [], errs = [];
+  for (const st of _qk.students) {
+    for (const kind of ['hifz', 'muraja']) {
+      const mastery = v(`qk-${kind==='hifz'?'mh':'mm'}-${st.id}`) || 'good';
+      const tRaw = v(`qk-${kind}-t-${st.id}`);
+      if (!tRaw) continue; // لا نسجّل إن لم تُكتب آية النهاية
+      const seg = qkSegments(v(`qk-${kind}-s-${st.id}`), parseInt(v(`qk-${kind}-f-${st.id}`)), v(`qk-${kind}-ts-${st.id}`), parseInt(tRaw));
+      if (!seg) { errs.push(`${st.full_name} (${kind==='hifz'?'حفظ':'مراجعة'}): تحقق من السورة والآيات`); continue; }
+      seg.forEach(x => {
+        const row = { student_id: st.id, date, surah_from: x.s.name, ayah_from: x.f, surah_to: x.s.name, ayah_to: x.t, mastery, recorded_by: CU.id };
+        if (kind === 'hifz') { row.verses_count = x.t - x.f + 1; hifz.push(row); } else mur.push(row);
+      });
+      pts.push([st.id, mastery]);
+    }
+  }
+  if (errs.length) { alert('⛔ لم يُحفظ شيء، صحّح التالي:\n\n' + errs.join('\n')); return; }
+  if (!hifz.length && !mur.length) { alert('لم تُدخل أي بيانات. اكتب آية "إلى" للطالب الذي تريد تسجيله.'); return; }
+  // تنبيه التكرار بنفس التاريخ
+  const ids = [...new Set([...hifz, ...mur].map(r => r.student_id))];
+  const [d1, d2] = await Promise.all([
+    hifz.length ? sb.from('memorization_log').select('student_id').eq('date', date).in('student_id', ids) : { data: [] },
+    mur.length ? sb.from('review_log').select('student_id').eq('date', date).in('student_id', ids) : { data: [] }
+  ]);
+  const dupSet = new Set([...(d1.data||[]).map(x=>x.student_id), ...(d2.data||[]).map(x=>x.student_id)]);
+  _qk.sess = _qk.sess || new Set();
+  const dupHere = ids.filter(i => dupSet.has(i) && !_qk.sess.has(i)).length;
+  if (dupHere && !confirm(`يوجد تسجيل سابق بنفس التاريخ لعدد ${dupHere} طالب.\nهل تريد إضافة التسجيل الجديد مع ذلك؟`)) return;
+  const btn = document.getElementById('qk-save'); btn.disabled = true; btn.textContent = 'جاري الحفظ...';
+  try {
+    if (hifz.length) { const { error } = await sb.from('memorization_log').insert(hifz); if (error) throw error; }
+    if (mur.length) { const { error } = await sb.from('review_log').insert(mur); if (error) throw error; }
+  } catch (e) {
+    alert('❌ لم يُحفظ: ' + (e.message || e)); btn.disabled = false; btn.textContent = '💾 حفظ ما أُدخل (والاستمرار)'; return;
+  }
+  // نقاط الإتقان كما في التسجيل الفردي
+  await Promise.all(pts.map(([sid, m]) => m === 'excellent' ? addPts(sid, 10, 'حفظ ممتاز') : m === 'good' ? addPts(sid, 5, 'حفظ جيد') : null).filter(Boolean));
+  btn.disabled = false; btn.textContent = '💾 حفظ ما أُدخل (والاستمرار)';
+  // نبقي الشاشة مفتوحة: نُقفل بطاقات من حُفظ لهم، ونحدّث نقطتهم الأخيرة، ونُنزلهم لأسفل القائمة
+  const box = document.getElementById('qk-rows'), dir = v('qk-dir') || 'asc';
+  const savedIds = [...new Set([...hifz, ...mur].map(r => r.student_id))];
+  savedIds.forEach(sid => {
+    _qk.sess.add(sid); _qk.done.add(sid);
+    [['hifz', hifz], ['muraja', mur]].forEach(([kind, rows]) => {
+      const mine = rows.filter(r => r.student_id === sid); if (!mine.length) return;
+      const lastRow = mine[mine.length - 1];
+      _qk.last[kind][sid] = { surah_to: lastRow.surah_to, ayah_to: lastRow.ayah_to, date };
+      const nx = qkNext(lastRow.surah_to, lastRow.ayah_to, dir);
+      const lbl = document.getElementById(`qk-last-${kind}-${sid}`); if (lbl) lbl.textContent = `آخر نقطة: ${lastRow.surah_to} ${lastRow.ayah_to}`;
+      if (nx) { document.getElementById(`qk-${kind}-s-${sid}`).value = nx.surah; document.getElementById(`qk-${kind}-f-${sid}`).value = nx.ayah; }
+      document.getElementById(`qk-${kind}-t-${sid}`).value = ''; document.getElementById(`qk-${kind}-ts-${sid}`).value = ''; quickCnt(kind, sid);
+    });
+    const card = document.getElementById(`qk-card-${sid}`);
+    if (card) { card.classList.add('qk-collapsed'); box.appendChild(card); }
+  });
+  quickMark();
+  const tip = document.getElementById('qk-toast'); tip.textContent = `✅ حُفظ ${savedIds.length} طالب (${hifz.length} حفظ، ${mur.length} مراجعة) — تابع مع بقية الطلاب`;
+  tip.style.display = 'block'; setTimeout(() => { tip.style.display = 'none'; }, 5000);
+  loadMemo();
+}
+function quickUnsaved() { return _qk.students.some(st => quickFilled(st.id)); }
+function quickClose() {
+  if (quickUnsaved() && !confirm('يوجد تسجيل أدخلته ولم تحفظه بعد. هل تريد إغلاق الشاشة وتجاهله؟')) return;
+  closeM('m-quick'); loadMemo();
+}
+// إنهاء الجلسة: تنبيه بمن لم يُسجَّل له أي شيء
+function quickFinish() {
+  if (quickUnsaved()) { alert('⚠️ هناك بيانات أدخلتها ولم تحفظها بعد.\nاضغط "حفظ ما أُدخل" أولاً ثم أنهِ التسجيل.'); return; }
+  const forgotten = _qk.students.filter(st => !(_qk.absent && _qk.absent.has(st.id)) && !(_qk.done && _qk.done.has(st.id)));
+  if (forgotten.length && !confirm(`⚠️ لم يُسجَّل شيء لهؤلاء الطلاب (${forgotten.length}):\n\n` + forgotten.map(x => '• ' + x.full_name).join('\n') + `\n\nهل لم يسمّعوا اليوم فعلاً؟\nموافق = إنهاء التسجيل\nإلغاء = ارجع وأكمل تسجيلهم`)) return;
+  closeM('m-quick'); loadMemo();
+}
+
 async function openMemoM(type) {
   document.getElementById('memo-type').value = type;
   document.getElementById('memo-title').textContent = type==='hifz' ? 'تسجيل حفظ جديد' : 'تسجيل مراجعة';
@@ -3310,12 +3602,16 @@ async function saveMemo() {
   if (!date) { alert('اختر التاريخ'); return; }
   if (date > today()) { alert('⛔ لا يمكن تسجيل حفظ بتاريخ في المستقبل. تأكد من اليوم والشهر في التاريخ.'); return; }
   const tbl = type==='hifz' ? 'memorization_log' : 'review_log';
+  if (!parseInt(af) || !parseInt(at)) { alert('⛔ اختر آية البداية وآية النهاية.'); return; }
+  const _rangeN = countVerses(sf, parseInt(af), st, parseInt(at));
+  if (_rangeN <= 0) { alert('⛔ ترتيب الآيات غير صحيح: بداية المقطع يجب أن تسبق نهايته (من ' + sf + ' آية ' + af + ' إلى ' + st + ' آية ' + at + ').\nراجع السورة والآية ثم أعد المحاولة.'); return; }
+  if (_rangeN > 300 && !confirm('المقطع المسجّل كبير جداً (' + _rangeN + ' آية). هل هو صحيح؟')) return;
   { // تنبيه إن كان للطالب تسجيل بنفس التاريخ
     const { data: dup } = await sb.from(tbl).select('id').eq('student_id', sid).eq('date', date).limit(1);
     if (dup && dup.length && !confirm('يوجد تسجيل لهذا الطالب بنفس التاريخ (' + date + ').\nهل تريد إضافة تسجيل آخر؟\n(إن كان خطأ فاضغط إلغاء وعدّل السجل الموجود من القائمة)')) return;
   }
   const insertData = {student_id:sid,date,surah_from:sf,ayah_from:parseInt(af)||1,surah_to:st,ayah_to:parseInt(at)||1,mastery,notes,recorded_by:CU.id};
-  if (tbl === 'memorization_log') insertData.verses_count = parseInt(vv)||0;
+  if (tbl === 'memorization_log') insertData.verses_count = _rangeN;
   try {
     const { error: insertError } = await sb.from(tbl).insert(insertData);
     if (insertError) throw insertError;
