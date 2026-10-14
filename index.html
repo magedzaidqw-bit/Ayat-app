@@ -734,7 +734,6 @@ async function doLogin() {
   if (authMode === 'admin') {
     email = document.getElementById('lemail').value.trim();
     pass = document.getElementById('lpass').value;
-    window._adminPassTemp = pass; // مؤقت لتسجيل البصمة
   } else if (authMode === 'teacher') {
     const civilId = document.getElementById('lcivilid').value.trim();
     pass = document.getElementById('lpass2').value;
@@ -776,7 +775,7 @@ async function loadProfile() {
   initApp();
 }
 
-document.getElementById('logoutbtn').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+document.getElementById('logoutbtn').addEventListener('click', async () => { await sb.auth.signOut(hasSavedBiometric() ? { scope: 'local' } : undefined); location.reload(); });
 
 function showAlert(id, msg, type) {
   const el = document.getElementById(id);
@@ -807,8 +806,27 @@ function hasSavedBiometric() {
 }
 
 function getSavedBiometric() {
-  try { return JSON.parse(localStorage.getItem(BIOMETRIC_KEY)); } catch(e) { return null; }
+  try {
+    const v = JSON.parse(localStorage.getItem(BIOMETRIC_KEY));
+    // نسخ قديمة كانت تحفظ كلمة المرور نصاً: نحذفها فوراً ويُعاد التفعيل
+    if (v && v.pass) { localStorage.removeItem(BIOMETRIC_KEY); return null; }
+    return v;
+  } catch(e) { return null; }
 }
+
+// نحدّث رمز التجديد المحفوظ كلما جدّده Supabase حتى تبقى البصمة صالحة
+function syncBiometricToken(session) {
+  try {
+    const v = getSavedBiometric();
+    if (v && session && session.refresh_token) {
+      v.rt = session.refresh_token;
+      localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(v));
+    }
+  } catch(e) {}
+}
+sb.auth.onAuthStateChange((ev, session) => {
+  if (ev === 'SIGNED_IN' || ev === 'TOKEN_REFRESHED') syncBiometricToken(session);
+});
 
 // عرض زر البصمة إذا كانت محفوظة
 async function checkBiometricOnLoad() {
@@ -869,13 +887,16 @@ async function registerBiometric() {
       timeout: 60000
     }});
 
-    // حفظ بيانات البصمة
+    // نحفظ رمز تجديد الجلسة بدل كلمة المرور
+    const { data: sess } = await sb.auth.getSession();
+    const rt = sess && sess.session && sess.session.refresh_token;
+    if (!rt) throw new Error('تعذر قراءة الجلسة، أعد الدخول ثم حاول مجدداً');
     const saved = {
       credId: Array.from(new Uint8Array(credential.rawId)),
       email: CU.email,
       name: CP.full_name,
       role: CP.role,
-      pass: window._adminPassTemp || CU.email.split('@')[0]
+      rt
     };
     localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(saved));
 
@@ -911,17 +932,14 @@ async function doBiometricLogin() {
     }});
 
     // البصمة صحيحة — الآن نسجل الدخول تلقائياً
-    const savedPass = saved.pass || saved.email.split('@')[0];
-    console.log('Biometric login for role:', saved.role, 'email:', saved.email);
-    const { data, error } = await sb.auth.signInWithPassword({ 
-      email: saved.email, 
-      password: savedPass
-    });
-    if (error) {
-      showAlert('auth-alert', 'تعذر الدخول — ربما تغيرت كلمة المرور. ادخل يدوياً مرة واحدة.', 'err');
+    const { data, error } = await sb.auth.refreshSession({ refresh_token: saved.rt });
+    if (error || !data || !data.user) {
+      localStorage.removeItem(BIOMETRIC_KEY);
+      showAlert('auth-alert', 'انتهت صلاحية البصمة. ادخل يدوياً مرة واحدة ثم فعّلها من جديد.', 'err');
       btn.disabled = false; btn.innerHTML = '<span style="font-size:22px">👆</span> دخول بالبصمة';
       return;
     }
+    syncBiometricToken(data.session);
     CU = data.user;
     await loadProfile();
   } catch(e) {
@@ -963,7 +981,9 @@ if ('serviceWorker' in navigator) {
 let attData = {};
 const today = () => ymdLocal(new Date());
 function v(id){ return document.getElementById(id)?.value || ''; }
-function esc(s){ return (s||'').toString(); }
+// تعقيم النصوص: h للنص داخل HTML، esc للنص داخل علامات اقتباس في onclick
+function h(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function esc(s){ return (s==null?'':String(s)).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,' ').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ===== مؤشر التحميل =====
 function showLoading(containerId) {
@@ -1207,7 +1227,7 @@ function loadPage(id) {
     dashboard: loadDash, circles: loadCircles, teachers: loadTeachers,
     supervisors: loadSupervisors, students: loadStudents, attendance: initAtt,
     memorization: () => { loadMemo(); populateMemoStudents(); populateMemoCircleFilter(); },
-    behavior: () => { loadBehavior(); populateStudentsForRole('beh-student'); populateSel('beh-circle', CP.role==='teacher'?null:'circles').then(()=>{ if(CP.role==='teacher') sb.from('circles').select('id,name').eq('teacher_id',CU.id).then(({data})=>{ const s=document.getElementById('beh-circle'); if(s&&data) { s.innerHTML='<option value="">اختر الحلقة</option>'+data.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); if(data.length===1){s.value=data[0].id;loadBehStudents();} } }); }); },
+    behavior: () => { loadBehavior(); populateStudentsForRole('beh-student'); populateSel('beh-circle', CP.role==='teacher'?null:'circles').then(()=>{ if(CP.role==='teacher') sb.from('circles').select('id,name').eq('teacher_id',CU.id).then(({data})=>{ const s=document.getElementById('beh-circle'); if(s&&data) { s.innerHTML='<option value="">اختر الحلقة</option>'+data.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join(''); if(data.length===1){s.value=data[0].id;loadBehStudents();} } }); }); },
     evaluations: loadEvals, top3: loadTop3, parent: loadParent,
     'teacher-home': loadTeacherHome, 'sup-home': loadActivity, 'sup-compare': loadSupCompare,
     'weekly-report': initWeeklyReport, 'monthly-report': initMonthlyReport, 'reports-view': initReportsView,
@@ -1901,15 +1921,33 @@ async function uploadPhoto(inputId, bucket) {
     showGlobalError('تعذر رفع الملف (' + (inputId==='s-civilphoto' ? 'البطاقة المدنية' : 'الصورة') + '): ' + (error.message || 'خطأ غير معروف') + ' — تحقق من صلاحيات مساحة التخزين (Storage) في Supabase.');
     return null;
   }
+  // البطاقات المدنية خاصة: نحفظ اسم الملف فقط ونولّد رابطاً مؤقتاً عند العرض
+  if (bucket === 'civil-ids') return fileName;
   const { data: urlData } = sb.storage.from(bucket).getPublicUrl(fileName);
   return urlData.publicUrl;
+}
+
+// يقبل اسم الملف أو الرابط القديم ويُرجع اسم الملف فقط
+function civilIdPath(ref) {
+  return (ref || '').split('?')[0].split('/').pop();
+}
+
+async function viewCivilId(ref) {
+  const w = window.open('', '_blank'); // نفتح النافذة فوراً حتى لا يمنعها المتصفح
+  const { data, error } = await sb.storage.from('civil-ids').createSignedUrl(civilIdPath(ref), 120);
+  if (error || !data) {
+    if (w) w.close();
+    showGlobalError('تعذر عرض البطاقة: ' + ((error && error.message) || 'لا تملك الصلاحية'));
+    return;
+  }
+  if (w) w.location.href = data.signedUrl; else window.location.href = data.signedUrl;
 }
 
 async function deleteStudentCivilId(studentId, photoUrl) {
   if (!confirm('حذف البطاقة المدنية لهذا الطالب؟')) return;
   // نحذف الملف الفعلي من مساحة التخزين أيضًا، وليس فقط الرابط من قاعدة البيانات
   try {
-    const fileName = photoUrl.split('/').pop().split('?')[0];
+    const fileName = civilIdPath(photoUrl);
     if (fileName) await sb.storage.from('civil-ids').remove([fileName]);
   } catch (e) { console.error('تعذر حذف الملف من التخزين:', e); }
 
@@ -1929,7 +1967,7 @@ async function populateModals(id) {
       const { data } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id).order('name');
       const sel = document.getElementById('s-circle');
       if (sel) {
-        sel.innerHTML = '<option value="">اختر الحلقة</option>' + (data?.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')||'');
+        sel.innerHTML = '<option value="">اختر الحلقة</option>' + (data?.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('')||'');
         // إن كان للمحفظ حلقة واحدة فقط نختارها تلقائياً
         if (data && data.length === 1) sel.value = data[0].id;
       }
@@ -1964,23 +2002,23 @@ async function populateSel(selId, type) {
       return data;
     }, 120000);
     const isFilter = selId.includes('filter') || selId === 'att-circle' || selId === 'top3-circle';
-    sel.innerHTML = (isFilter ? '<option value="">الكل</option>' : '<option value="">اختر الحلقة</option>') + (data?.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')||'');
+    sel.innerHTML = (isFilter ? '<option value="">الكل</option>' : '<option value="">اختر الحلقة</option>') + (data?.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('')||'');
   } else if (type === 'teachers') {
     const data = await cachedFetch('teachers_list', async () => {
       const { data } = await sb.from('profiles').select('id,full_name').eq('role','teacher').order('full_name');
       return data;
     }, 120000);
-    sel.innerHTML = '<option value="">اختر المحفظ</option>' + (data?.map(t=>`<option value="${t.id}">${t.full_name}</option>`).join('')||'');
+    sel.innerHTML = '<option value="">اختر المحفظ</option>' + (data?.map(t=>`<option value="${t.id}">${h(t.full_name)}</option>`).join('')||'');
   } else if (type === 'students-full') {
     const { data } = await sb.from('students').select('id,full_name,circles(name,teacher_name)').order('full_name');
-    sel.innerHTML = '<option value="">اختر الطالب</option>' + (data?.map(s=>`<option value="${s.id}">${s.full_name} — ${s.circles?.name||'—'}</option>`).join('')||'');
+    sel.innerHTML = '<option value="">اختر الطالب</option>' + (data?.map(s=>`<option value="${s.id}">${h(s.full_name)} — ${s.circles?.name||'—'}</option>`).join('')||'');
   }
 }
 
 async function populateMultiSel(selId) {
   const { data } = await sb.from('circles').select('id,name').order('name');
   const sel = document.getElementById(selId);
-  if (sel && data) sel.innerHTML = data.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  if (sel && data) sel.innerHTML = data.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('');
 }
 
 // ===================== معالج الأخطاء العالمي =====================
@@ -2025,7 +2063,7 @@ async function loadCircles() {
   const b = document.getElementById('circles-body');
   b.innerHTML = data?.length ? data.map((c,i)=>`<tr>
     <td style="color:var(--mid);font-weight:700">${i+1}</td>
-    <td><strong>${c.name}</strong></td>
+    <td><strong>${h(c.name)}</strong></td>
     <td>${c.teacher_name || '—'}</td>
     <td>${c.schedule||'—'}</td>
     <td>${c.location||'—'}</td>
@@ -2095,8 +2133,8 @@ async function loadTeachers() {
   // First: teachers with accounts (profiles)
   (profileTeachers||[]).forEach(t=>{
     const sc = avgs[t.id]||[], avg = sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null;
-    const photo = t.civil_id_photo ? `<img src="${t.civil_id_photo}" class="avatar-sm">` : `<div class="avatar-placeholder">${svgAvatar(24)}</div>`;
-    rows += `<tr><td style="color:var(--mid);font-weight:700">${rowNum++}</td><td>${photo}</td><td><strong>${t.full_name}</strong></td><td>${t.civil_id||'—'}</td><td>${t.phone||'—'}</td><td><span class="badge be">حساب نشط</span></td>
+    const photo = `<div class="avatar-placeholder">${svgAvatar(24)}</div>`;
+    rows += `<tr><td style="color:var(--mid);font-weight:700">${rowNum++}</td><td>${photo}</td><td><strong>${h(t.full_name)}</strong></td><td>${t.civil_id||'—'}</td><td>${t.phone||'—'}</td><td><span class="badge be">حساب نشط</span></td>
       <td>${avg!==null?`<div style="display:flex;align-items:center;gap:6px"><strong style="min-width:45px;font-size:12px">${avg}/60</strong><div style="flex:1;background:#eee;border-radius:4px;height:6px;max-width:80px"><div style="background:#1d6b3a;border-radius:4px;height:6px;width:${Math.round(avg/60*100)}%"></div></div></div>`:'لم يُقيَّم'}</td>
       <td><button class="btn btn-gold btn-sm" onclick="openEvalFor('${t.id}')">تقييم</button> <button class="btn btn-o btn-sm" onclick="editProfile('${t.id}','${esc(t.full_name)}','${esc(t.phone||'')}','teacher')">✏️</button> <button class="btn btn-r btn-sm" onclick="delTeacher('${t.id}')">حذف</button></td></tr>`;
   });
@@ -2123,7 +2161,7 @@ async function loadTeachers() {
       cardsEl.style.display = 'block';
       cardsEl.innerHTML = '<div class="mobile-card-list">' + mobileData.map(r => `
         <div class="mobile-card">
-          <div class="mobile-card-name">${r.full_name}</div>
+          <div class="mobile-card-name">${h(r.full_name)}</div>
           <div class="mobile-card-row"><span>الرقم المدني</span><span>${r.civil_id||'—'}</span></div>
           <div class="mobile-card-row"><span>الهاتف</span><span>${r.phone||'—'}</span></div>
           <div class="mobile-card-row"><span>متوسط التقييم</span><span>${r._avg!==null?r._avg+'/60':'لم يُقيَّم'}</span></div>
@@ -2175,7 +2213,7 @@ async function loadSupervisors() {
   const { data: links } = await sb.from('supervisor_circles').select('supervisor_id,circles(name)');
   const circlesBySup = {}; links?.forEach(l=>{ if(!circlesBySup[l.supervisor_id]) circlesBySup[l.supervisor_id]=[]; circlesBySup[l.supervisor_id].push(l.circles?.name); });
   const b = document.getElementById('supervisors-body');
-  b.innerHTML = data?.length ? data.map((s,i)=>`<tr><td style="color:var(--mid);font-weight:700">${i+1}</td><td><strong>${s.full_name}</strong></td><td>${s.civil_id||'—'}</td><td>${s.phone||'—'}</td><td>${(circlesBySup[s.id]||[]).length ? (circlesBySup[s.id]||[]).join('<br>') : '—'}</td><td><button class="btn btn-o btn-sm" onclick="editProfile('${s.id}','${esc(s.full_name)}','${esc(s.phone||'')}','supervisor')">✏️</button> <button class="btn btn-g btn-sm" onclick="editSupCircles('${s.id}','${esc(s.full_name)}')">🔗 حلقاته</button> <button class="btn btn-r btn-sm" onclick="delSupervisor('${s.id}')">حذف</button></td></tr>`).join('') : emptyRow(6,'لا يوجد مشرفون بعد');
+  b.innerHTML = data?.length ? data.map((s,i)=>`<tr><td style="color:var(--mid);font-weight:700">${i+1}</td><td><strong>${h(s.full_name)}</strong></td><td>${s.civil_id||'—'}</td><td>${s.phone||'—'}</td><td>${(circlesBySup[s.id]||[]).length ? (circlesBySup[s.id]||[]).join('<br>') : '—'}</td><td><button class="btn btn-o btn-sm" onclick="editProfile('${s.id}','${esc(s.full_name)}','${esc(s.phone||'')}','supervisor')">✏️</button> <button class="btn btn-g btn-sm" onclick="editSupCircles('${s.id}','${esc(s.full_name)}')">🔗 حلقاته</button> <button class="btn btn-r btn-sm" onclick="delSupervisor('${s.id}')">حذف</button></td></tr>`).join('') : emptyRow(6,'لا يوجد مشرفون بعد');
 }
 async function saveSupervisor() {
   const name=v('sv-name'), civilId=v('sv-civilid'), pass=v('sv-pass'), phone=v('sv-phone');
@@ -2204,7 +2242,7 @@ async function editSupCircles(supId, supName) {
   container.innerHTML = allCircles?.map(c => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;cursor:pointer;border-radius:6px;margin-bottom:4px;background:${myCircleIds.includes(c.id)?'#e8f5e9':'#f9f9f9'}">
       <input type="checkbox" value="${c.id}" ${myCircleIds.includes(c.id)?'checked':''} onchange="this.closest('label').style.background=this.checked?'#e8f5e9':'#f9f9f9'">
-      <span>${c.name}</span>
+      <span>${h(c.name)}</span>
     </label>`).join('') || '';
   document.getElementById('sup-circles-title').textContent = 'حلقات: ' + supName;
   const saveBtn = document.getElementById('sup-circles-save-btn');
@@ -2262,7 +2300,7 @@ async function populateStudentsForRole(selId, circleFilterSelId) {
     students = data || [];
   }
   sel.innerHTML = '<option value="">اختر الطالب</option>' + 
-    students.map(s => `<option value="${s.id}">${s.full_name} — ${s.circles?.name||'—'}</option>`).join('');
+    students.map(s => `<option value="${s.id}">${h(s.full_name)} — ${s.circles?.name||'—'}</option>`).join('');
 }
 
 // نجلب معرّفات الطلاب الذين لديهم سجل اليوم بالفعل، لاستبعادهم من قائمة "حفظ/مراجعة فردية"
@@ -2290,11 +2328,11 @@ async function populateMemoCircleFilter() {
   if (!sel) return;
   if (CP.role === 'teacher') {
     const { data } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
-    sel.innerHTML = '<option value="">جميع الحلقات</option>' + (data||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    sel.innerHTML = '<option value="">جميع الحلقات</option>' + (data||[]).map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
     if (data?.length === 1) sel.value = data[0].id;
   } else {
     const { data } = await sb.from('circles').select('id,name').order('name');
-    sel.innerHTML = '<option value="">جميع الحلقات</option>' + (data||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    sel.innerHTML = '<option value="">جميع الحلقات</option>' + (data||[]).map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
   }
 }
 
@@ -2342,7 +2380,7 @@ const SURAHS = [
 
 function populateSurahSelects() {
   const opts = '<option value="">اختر السورة</option>' + 
-    SURAHS.map(s => `<option value="${s.name}" data-verses="${s.v}">${s.n}. ${s.name} (${s.v} آية)</option>`).join('');
+    SURAHS.map(s => `<option value="${h(s.name)}" data-verses="${s.v}">${s.n}. ${h(s.name)} (${s.v} آية)</option>`).join('');
   ['memo-sf','memo-st'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = opts;
@@ -2528,14 +2566,14 @@ async function loadStudents() {
       cardsEl.style.display = 'block';
       cardsEl.innerHTML = '<div class="mobile-card-list">' + (data||[]).map(s => `
         <div class="mobile-card">
-          <div class="mobile-card-name">${s.full_name}</div>
+          <div class="mobile-card-name">${h(s.full_name)}</div>
           <div class="mobile-card-row"><span>الحلقة</span><span>${s.circles?.name||'—'}</span></div>
           <div class="mobile-card-row"><span>المحفظ</span><span>${s.circles?.teacher_name||'—'}</span></div>
           <div class="mobile-card-row"><span>النقاط</span><span>⭐ ${s.total_points||0}</span></div>
           <div class="mobile-card-actions">
-            ${s.civil_id_photo ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="window.open('${s.civil_id_photo}','_blank')">🪪 عرض البطاقة</button><button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')">🗑️</button>` : ''}
+            ${s.civil_id_photo ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="viewCivilId('${s.civil_id_photo}')">🪪 عرض البطاقة</button><button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')">🗑️</button>` : ''}
             <button class="btn btn-sm" style="background:linear-gradient(135deg,#a89655,#2f6767);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})">🏅 بطاقة الإنجاز</button>
-            <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${s.full_name}')">+نقاط</button>
+            <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${esc(s.full_name)}')">+نقاط</button>
             <button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button>
             <button class="btn btn-r btn-sm" onclick="delStudent('${s.id}')">حذف</button>
           </div>
@@ -2550,10 +2588,10 @@ async function loadStudents() {
       const photo = s.photo ? `<img src="${s.photo}" class="avatar-sm">` : `<div class="avatar-placeholder">${svgAvatar(24)}</div>`;
       const parentBadge = s.parent_id ? `<span title="مرتبط بولي أمر" style="color:#1d6b3a;font-size:16px">👨‍👦</span>` : `<span title="لا يوجد حساب ولي أمر" style="color:var(--gray2);font-size:16px">👤</span>`;
       const civilBtn = s.civil_id_photo
-        ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="window.open('${s.civil_id_photo}','_blank')" title="عرض البطاقة المدنية">🪪 عرض</button> <button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')" title="حذف البطاقة المدنية">🗑️</button>`
+        ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="viewCivilId('${s.civil_id_photo}')" title="عرض البطاقة المدنية">🪪 عرض</button> <button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')" title="حذف البطاقة المدنية">🗑️</button>`
         : `<span title="لا توجد بطاقة مدنية مرفوعة" style="color:var(--gray2);font-size:13px">🪪✕</span>`;
-      return `<tr><td style="color:var(--mid);font-weight:700">${i+1}</td><td>${photo}</td><td><strong>${s.full_name}</strong></td><td>${s.circles?.name||'—'}</td><td>${s.circles?.teacher_name||'—'}</td><td>${s.civil_id||'—'}</td><td><span class="pts">⭐ ${s.total_points||0}</span></td>
-        <td style="white-space:nowrap">${civilBtn} <button class="btn btn-sm" style="background:linear-gradient(135deg,#a89655,#2f6767);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})" title="بطاقة الإنجاز">🏅</button> <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${s.full_name}')">+نقاط</button> <button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button> ${parentBadge} <button class="btn btn-r btn-sm" onclick="delStudent('${s.id}')">حذف</button></td></tr>`;
+      return `<tr><td style="color:var(--mid);font-weight:700">${i+1}</td><td>${photo}</td><td><strong>${h(s.full_name)}</strong></td><td>${s.circles?.name||'—'}</td><td>${s.circles?.teacher_name||'—'}</td><td>${s.civil_id||'—'}</td><td><span class="pts">⭐ ${s.total_points||0}</span></td>
+        <td style="white-space:nowrap">${civilBtn} <button class="btn btn-sm" style="background:linear-gradient(135deg,#a89655,#2f6767);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})" title="بطاقة الإنجاز">🏅</button> <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${esc(s.full_name)}')">+نقاط</button> <button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button> ${parentBadge} <button class="btn btn-r btn-sm" onclick="delStudent('${s.id}')">حذف</button></td></tr>`;
     }).join('') : emptyRow(8,'لا يوجد طلاب بعد');
   }
 }
@@ -2582,7 +2620,7 @@ async function editStudent(id) {
     const { data } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id).order('name');
     const sel = document.getElementById('s-circle');
     if (sel) {
-      sel.innerHTML = '<option value="">اختر الحلقة</option>' + (data?.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')||'');
+      sel.innerHTML = '<option value="">اختر الحلقة</option>' + (data?.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('')||'');
       sel.value = s.circle_id || '';
       // تحذير احترازي: إن لم تُطابق قيمة الحلقة أي خيار متاح للمحفظ (حالة نادرة وغير متوقعة)
       if (s.circle_id && sel.value !== s.circle_id) {
@@ -2747,7 +2785,7 @@ async function initAtt() {
   if (CP.role === 'teacher') {
     const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
     if (circles?.length) {
-      sel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      sel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
       if (circles.length === 1) { sel.value = circles[0].id; loadAttStudents(); }
     }
   } else if (CP.role === 'supervisor') {
@@ -2755,7 +2793,7 @@ async function initAtt() {
     if (links?.length) {
       const ids = links.map(l => l.circle_id);
       const { data: circles } = await sb.from('circles').select('id,name').in('id', ids);
-      sel.innerHTML = '<option value="">اختر الحلقة</option>' + (circles||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      sel.innerHTML = '<option value="">اختر الحلقة</option>' + (circles||[]).map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
     }
   } else {
     await populateSel('att-circle','circles');
@@ -2831,7 +2869,7 @@ async function loadAttStudents() {
 
   list.innerHTML = tip + data.map(s => `
     <div class="arow" id="arow-${s.id}" style="padding:10px 14px;border-bottom:1px solid var(--gray);display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <span style="font-weight:600;font-size:14px;flex:1">${s.full_name}</span>
+      <span style="font-weight:600;font-size:14px;flex:1">${h(s.full_name)}</span>
       <div style="display:flex;gap:6px">
         <button class="att-quick-btn att-p sel" id="abtn-p-${s.id}" onclick="setAttQuick('${s.id}','p')" 
           style="padding:8px 14px;border-radius:10px;border:none;cursor:pointer;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;background:#1d6b3a;color:white">✓</button>
@@ -2839,7 +2877,7 @@ async function loadAttStudents() {
           style="padding:8px 14px;border-radius:10px;border:none;cursor:pointer;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;background:var(--gray);color:var(--mid)">✗</button>
         <button class="att-quick-btn att-e" id="abtn-e-${s.id}" onclick="setAttQuick('${s.id}','e')"
           style="padding:8px 14px;border-radius:10px;border:none;cursor:pointer;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;background:var(--gray);color:var(--mid)">~</button>
-        <button class="att-quick-btn att-v" id="abtn-v-${s.id}" onclick="openLeaveModal('${s.id}','${s.full_name}')"
+        <button class="att-quick-btn att-v" id="abtn-v-${s.id}" onclick="openLeaveModal('${s.id}','${esc(s.full_name)}')"
           style="padding:8px 14px;border-radius:10px;border:none;cursor:pointer;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;background:var(--gray);color:var(--mid)">✈</button>
       </div>
     </div>`).join('');
@@ -2971,7 +3009,7 @@ async function printMemoHistory() {
 
     return `<tr style="background:${bg}">
       <td style="border:1px solid #ccc;padding:3px 2px;text-align:center;font-size:9px">${i+1}</td>
-      <td style="border:1px solid #ccc;padding:3px 4px;font-size:9px;font-weight:700">${s.name}</td>
+      <td style="border:1px solid #ccc;padding:3px 4px;font-size:9px;font-weight:700">${h(s.name)}</td>
       <td style="border:1px solid #ccc;padding:3px 4px;font-size:9px">${hCell}</td>
       <td style="border:1px solid #ccc;padding:3px 2px;text-align:center;font-size:9px;font-weight:700">${hGrade}</td>
       <td style="border:1px solid #ccc;padding:3px 4px;font-size:9px">${mCell}</td>
@@ -3157,7 +3195,7 @@ async function updateAttStatus(id, status) {
 // ===================== MEMORIZATION =====================
 async function openBulkReview() {
   const opts = '<option value="">اختر السورة</option>' +
-    SURAHS.map(s => `<option value="${s.name}" data-verses="${s.v}">${s.n}. ${s.name} (${s.v} آية)</option>`).join('');
+    SURAHS.map(s => `<option value="${h(s.name)}" data-verses="${s.v}">${s.n}. ${h(s.name)} (${s.v} آية)</option>`).join('');
   ['bulk-rev-sf','bulk-rev-st'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=opts; });
   document.getElementById('bulk-rev-date').value = new Date().toISOString().split('T')[0];
   const div = document.getElementById('bulk-rev-students');
@@ -3171,7 +3209,7 @@ async function openBulkReview() {
   }
   const { data: students } = await q;
   if (!students?.length) { div.innerHTML = '<div style="color:#999">لا يوجد طلاب</div>'; return; }
-  div.innerHTML = students.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #f0f0f0;cursor:pointer"><input type="checkbox" value="${s.id}" checked style="width:18px;height:18px;accent-color:#14568f"><span style="font-size:14px">${s.full_name}</span></label>`).join('');
+  div.innerHTML = students.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #f0f0f0;cursor:pointer"><input type="checkbox" value="${s.id}" checked style="width:18px;height:18px;accent-color:#14568f"><span style="font-size:14px">${h(s.full_name)}</span></label>`).join('');
 }
 
 function toggleAllBulkReview() {
@@ -3204,7 +3242,7 @@ async function saveBulkReview() {
 
 async function openBulkHifz() {
   const opts = '<option value="">اختر السورة</option>' + 
-    SURAHS.map(s => `<option value="${s.name}" data-verses="${s.v}">${s.n}. ${s.name} (${s.v} آية)</option>`).join('');
+    SURAHS.map(s => `<option value="${h(s.name)}" data-verses="${s.v}">${s.n}. ${h(s.name)} (${s.v} آية)</option>`).join('');
   ['bulk-sf','bulk-st'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=opts; });
   document.getElementById('bulk-date').value = today(); document.getElementById('bulk-date').max = today();
   const div = document.getElementById('bulk-students');
@@ -3218,7 +3256,7 @@ async function openBulkHifz() {
   }
   const { data: students } = await q;
   if (!students?.length) { div.innerHTML = '<div style="color:#999">لا يوجد طلاب</div>'; return; }
-  div.innerHTML = students.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #f0f0f0;cursor:pointer"><input type="checkbox" value="${s.id}" checked style="width:18px;height:18px;accent-color:var(--gm)"><span style="font-size:14px">${s.full_name}</span></label>`).join('');
+  div.innerHTML = students.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #f0f0f0;cursor:pointer"><input type="checkbox" value="${s.id}" checked style="width:18px;height:18px;accent-color:var(--gm)"><span style="font-size:14px">${h(s.full_name)}</span></label>`).join('');
 }
 function calcBulkVerses() {
   const sf=document.getElementById('bulk-sf')?.value, af=document.getElementById('bulk-af')?.value;
@@ -3401,7 +3439,7 @@ async function editMemoLog(tbl, id) {
   if (error || !data) { alert('تعذّر فتح السجل: ' + (error?.message || 'غير موجود')); return; }
   document.getElementById('edit-memo-title').textContent = tbl === 'memorization_log' ? 'تعديل سجل الحفظ' : 'تعديل سجل المراجعة';
   document.getElementById('edit-memo-student').textContent = '👤 ' + (data.students?.full_name || '');
-  const opts = '<option value="">اختر السورة</option>' + SURAHS.map(s => `<option value="${s.name}" data-verses="${s.v}">${s.n}. ${s.name} (${s.v} آية)</option>`).join('');
+  const opts = '<option value="">اختر السورة</option>' + SURAHS.map(s => `<option value="${h(s.name)}" data-verses="${s.v}">${s.n}. ${h(s.name)} (${s.v} آية)</option>`).join('');
   ['edit-memo-sf','edit-memo-st'].forEach(x => document.getElementById(x).innerHTML = opts);
   document.getElementById('edit-memo-sf').value = data.surah_from || '';
   document.getElementById('edit-memo-st').value = data.surah_to || '';
@@ -3448,7 +3486,7 @@ async function loadBehStudents() {
   list.innerHTML = students.map(s => `
     <div style="border-bottom:1px solid var(--gray);padding:12px 0">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:8px">
-        <strong style="font-size:14px">${s.full_name}</strong>
+        <strong style="font-size:14px">${h(s.full_name)}</strong>
         <div style="display:flex;gap:6px">
           ${[1,2,3,4,5].map(n => `
             <button onclick="setBehScore('${s.id}',${n},this)" 
@@ -3804,7 +3842,7 @@ function shareActivityWA() {
   L.push('جمعية آيات الخيرية', '');
   if (d.bad.length) L.push(`🔴 *لم يسجّلوا حضورًا ولا حفظًا:*`, d.bad.map(r => '• ' + r.t.full_name).join('\n'), '');
   if (d.mid.length) L.push(`🟡 *تسجيل ناقص:*`, d.mid.map(r => '• ' + r.t.full_name).join('\n'), '');
-  if (d.supIncomplete.length) L.push(`🧑‍💼 *تقييم ${d.monthName} لم يكتمل:*`, d.supIncomplete.map(r => `• ${r.s.full_name} (${r.pending.length} متبقٍ)`).join('\n'), '');
+  if (d.supIncomplete.length) L.push(`🧑‍💼 *تقييم ${d.monthName} لم يكتمل:*`, d.supIncomplete.map(r => `• ${h(r.s.full_name)} (${r.pending.length} متبقٍ)`).join('\n'), '');
   if (!d.bad.length && !d.mid.length && !d.supIncomplete.length) L.push('✅ الجميع منتظمون، بارك الله فيكم.');
   else L.push('نرجو استكمال المطلوب في البرنامج، جزاكم الله خيرًا.');
   window.open('https://wa.me/?text=' + encodeURIComponent(L.join('\n')), '_blank');
@@ -3863,7 +3901,7 @@ async function loadEvals() {
   b.innerHTML = data?.length ? data.map(e=>`<tr>
     <td>
       <strong>${e.teacher?.full_name||'—'}</strong>
-      ${e.notes?`<div style="font-size:11px;color:var(--mid);margin-top:4px;border-right:2px solid var(--gold);padding-right:6px">${esc(e.notes)}</div>`:''}
+      ${e.notes?`<div style="font-size:11px;color:var(--mid);margin-top:4px;border-right:2px solid var(--gold);padding-right:6px">${h(e.notes)}</div>`:''}
     </td>
     <td style="white-space:nowrap">${evMonthLabel(e.eval_date)}</td>
     <td>${e.visits===2?'زيارتان':'زيارة'}</td>
@@ -4033,7 +4071,7 @@ async function printEvalCard(evalId) {
           }).join('')}
         </tbody>
       </table>
-      ${evals.notes?`<div style="margin-top:14px;padding:12px;background:#f5f2ea;border-radius:8px;border-right:4px solid #0c2424"><strong>ملاحظات وتوصيات المشرف:</strong><br><span style="font-size:13px">${evals.notes}</span></div>`:''}
+      ${evals.notes?`<div style="margin-top:14px;padding:12px;background:#f5f2ea;border-radius:8px;border-right:4px solid #0c2424"><strong>ملاحظات وتوصيات المشرف:</strong><br><span style="font-size:13px">${h(evals.notes)}</span></div>`:''}
     </div>`;
   openPrintWindow();
 }
@@ -4125,7 +4163,7 @@ async function loadTop3() {
     if (CP.role === 'teacher') {
       const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
       if (circles?.length) {
-        sel.innerHTML = '<option value="">اختر حلقة لعرض فرسانها</option>' + circles.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        sel.innerHTML = '<option value="">اختر حلقة لعرض فرسانها</option>' + circles.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
         if (circles.length === 1) sel.value = circles[0].id;
       }
     } else if (CP.role === 'supervisor') {
@@ -4133,7 +4171,7 @@ async function loadTop3() {
       if (links?.length) {
         const ids = links.map(l => l.circle_id);
         const { data: circles } = await sb.from('circles').select('id,name').in('id', ids);
-        sel.innerHTML = '<option value="">اختر حلقة لعرض فرسانها</option>' + (circles||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        sel.innerHTML = '<option value="">اختر حلقة لعرض فرسانها</option>' + (circles||[]).map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
       }
     } else {
       await populateSel('top3-circle','circles');
@@ -4394,7 +4432,7 @@ async function loadParent() {
         ${circleTop.map((cs,i) => `
           <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:10px;margin-bottom:6px;background:${cs.id===s.id?'#e8f5e9':'#fafafa'};border:${cs.id===s.id?'1.5px solid #1d6b3a':'1.5px solid #f0f0f0'}">
             <div>${svgMedal(i,30)}</div>
-            <div style="flex:1;font-size:14px;font-weight:700;color:${cs.id===s.id?'#1d6b3a':'var(--ink)'}">${cs.full_name}${cs.id===s.id?' 👈':''}</div>
+            <div style="flex:1;font-size:14px;font-weight:700;color:${cs.id===s.id?'#1d6b3a':'var(--ink)'}">${h(cs.full_name)}${cs.id===s.id?' 👈':''}</div>
             <div style="font-size:15px;font-weight:900;color:var(--gold)">⭐ ${cs.total_points||0}</div>
           </div>`).join('')}
         ${studentRank>=0 ? `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--mid)">ترتيب ${s.full_name.split(' ')[0]} في الحلقة: <strong style="color:var(--gd)">#${studentRank+1}</strong></div>` : ''}
@@ -4408,7 +4446,7 @@ async function loadParent() {
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;position:relative">
         ${photo}
         <div style="flex:1;min-width:150px">
-          <h2 style="font-family:'Amiri',serif;color:var(--gold3);font-size:22px;margin-bottom:6px">${s.full_name}</h2>
+          <h2 style="font-family:'Amiri',serif;color:var(--gold3);font-size:22px;margin-bottom:6px">${h(s.full_name)}</h2>
           <div style="font-size:12px;opacity:0.7;line-height:1.8">
             🕌 ${s.circles?.name||'—'}<br>
             👨‍🏫 ${s.circles?.teacher_name||'—'}<br>
@@ -4457,7 +4495,7 @@ async function loadParent() {
           ${masteryAr[lastMemo.mastery]||lastMemo.mastery}
         </span>
       </div>
-      ${lastMemo.notes?`<div style="margin-top:8px;font-size:12px;color:var(--mid);padding:8px;background:var(--gray);border-radius:8px">💬 ${lastMemo.notes}</div>`:''}
+      ${lastMemo.notes?`<div style="margin-top:8px;font-size:12px;color:var(--mid);padding:8px;background:var(--gray);border-radius:8px">💬 ${h(lastMemo.notes)}</div>`:''}
     </div>` : `
     <div style="background:white;border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:var(--shadow-sm);text-align:center;color:var(--mid)">
       <div style="font-size:24px;opacity:0.3">📖</div>
@@ -4746,10 +4784,10 @@ async function sendWeeklyReportWA() {
 
     const msg =
 `السلام عليكم ورحمة الله وبركاته 🌿
-${s.parent_name ? `/ ${s.parent_name}` : ''}
+${s.parent_name ? `/ ${h(s.parent_name)}` : ''}
 
 تقرير أسبوعي لابنكم
-*${s.full_name}*
+*${h(s.full_name)}*
 من جمعية آيات الخيرية 📖
 
 ━━━━━━━━━━━━━━━
@@ -4877,8 +4915,8 @@ async function loadSupHome() {
     <div class="sc"><div class="si">🕌</div><div><div class="sn">${circles?.length||0}</div><div class="sl">حلقات تحت إشرافك</div></div></div>
     <div class="sc" style="border-color:var(--gold)"><div class="si" style="background:#fdf1d9">🎓</div><div><div class="sn">${totalStudents}</div><div class="sl">إجمالي الطلاب</div></div></div>
     <div class="sc" style="border-color:#14568f"><div class="si" style="background:#e0eefb">📅</div><div><div class="sn">${avgAtt}%</div><div class="sl">متوسط الحضور</div></div></div>
-    ${bestAttCircle  ? `<div class="sc" style="border-color:#1d6b3a"><div class="si" style="background:#e3f3e8">🏆</div><div><div class="sn" style="font-size:13px">${bestAttCircle.circle.name}</div><div class="sl">أعلى حضور (${bestAttCircle.attRate}%)</div></div></div>` : ''}
-    ${bestMemoCircle ? `<div class="sc" style="border-color:#a89655"><div class="si" style="background:#fdf1d9">📖</div><div><div class="sn" style="font-size:13px">${bestMemoCircle.circle.name}</div><div class="sl">أعلى حفظ (${bestMemoCircle.memoAvg}/5)</div></div></div>` : ''}
+    ${bestAttCircle  ? `<div class="sc" style="border-color:#1d6b3a"><div class="si" style="background:#e3f3e8">🏆</div><div><div class="sn" style="font-size:13px">${h(bestAttCircle.circle.name)}</div><div class="sl">أعلى حضور (${bestAttCircle.attRate}%)</div></div></div>` : ''}
+    ${bestMemoCircle ? `<div class="sc" style="border-color:#a89655"><div class="si" style="background:#fdf1d9">📖</div><div><div class="sn" style="font-size:13px">${h(bestMemoCircle.circle.name)}</div><div class="sl">أعلى حفظ (${bestMemoCircle.memoAvg}/5)</div></div></div>` : ''}
   </div>
 
   <!-- جدول المقارنة -->
@@ -4905,7 +4943,7 @@ async function loadSupHome() {
               const attColor = s.attRate>=80?'be':s.attRate>=60?'br':'bw';
               const rank = i<3 ? svgMedal(i,22) : '';
               return `<tr>
-                <td><strong>${rank} ${s.circle.name}</strong></td>
+                <td><strong>${rank} ${h(s.circle.name)}</strong></td>
                 <td>${s.circle.teacher_name||'—'}</td>
                 <td><strong>${s.count}</strong></td>
                 <td>
@@ -5002,7 +5040,7 @@ async function loadDonors() {
     const circleNames = circles.map(c=>c?.name).filter(Boolean).join('، ') || '—';
     return `<tr>
       <td style="color:var(--mid);font-weight:700">${i+1}</td>
-      <td><strong>${d.full_name}</strong>${d.notes?`<br><small style="color:var(--mid)">${d.notes}</small>`:''}</td>
+      <td><strong>${h(d.full_name)}</strong>${d.notes?`<br><small style="color:var(--mid)">${h(d.notes)}</small>`:''}</td>
       <td>${d.phone||'—'}</td>
       <td><span style="font-size:12px">${circleNames}</span></td>
       <td>
@@ -5043,7 +5081,7 @@ async function loadDonorCirclesChecks(checkedIds=[]) {
     <label style="display:flex;align-items:center;gap:8px;padding:6px;cursor:pointer;border-radius:6px;margin-bottom:3px;background:${checkedIds.includes(c.id)?'#e8f5e9':'transparent'}">
       <input type="checkbox" value="${c.id}" ${checkedIds.includes(c.id)?'checked':''}
         onchange="this.closest('label').style.background=this.checked?'#e8f5e9':'transparent'">
-      <span style="font-size:13px">${c.name}</span>
+      <span style="font-size:13px">${h(c.name)}</span>
     </label>`).join('') || '';
 }
 
@@ -5207,10 +5245,10 @@ async function showDonorReport(donorId, donorName, donorPhone) {
       const sSBehAvg=sBeh.length?(sBeh.reduce((t,b)=>t+b.score,0)/sBeh.length).toFixed(1):'—';
       const sRate=(sPresent+sAbsent)?Math.round(sPresent/(sPresent+sAbsent)*100):0;
       const sc=sRate>=80?'be':sRate>=60?'br':'bw';
-      return `<tr><td><strong>${s.full_name}</strong></td><td><span class="badge ${sc}">${sRate}%</span> (${sPresent}✓ ${sAbsent}✗)</td><td>${sVerses} آية (${sMemo.length} جلسة)</td><td>${sSBehAvg}/5</td></tr>`;
+      return `<tr><td><strong>${h(s.full_name)}</strong></td><td><span class="badge ${sc}">${sRate}%</span> (${sPresent}✓ ${sAbsent}✗)</td><td>${sVerses} آية (${sMemo.length} جلسة)</td><td>${sSBehAvg}/5</td></tr>`;
     }).join('');
     html+=`<div class="report-card" style="margin-bottom:16px">
-      <div class="report-card-head"><h3>🕌 ${circle.name}</h3><span style="color:var(--gold3);font-size:13px">المحفظ: ${circle.teacher_name||'—'} | <span class="badge ${attColor}">${sAttRate}% حضور</span></span></div>
+      <div class="report-card-head"><h3>🕌 ${h(circle.name)}</h3><span style="color:var(--gold3);font-size:13px">المحفظ: ${circle.teacher_name||'—'} | <span class="badge ${attColor}">${sAttRate}% حضور</span></span></div>
       <div class="report-section">
         <div class="stat-row">
           <div class="stat-box"><div class="num">${students?.length||0}</div><div class="lbl">طالب</div></div>
@@ -5337,7 +5375,7 @@ function printDonorReport(donorName) {
   const circlesHtml = (data.circles||[]).map((c,ci) => `
     <div style="border:2px solid #a89655;border-radius:14px;padding:18px;margin-bottom:18px;page-break-inside:avoid;background:#fffdf5">
       <div style="background:linear-gradient(135deg,#0c2424,#2d6262);color:white;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:14px;font-weight:800">🕌 ${c.name}</span>
+        <span style="font-size:14px;font-weight:800">🕌 ${h(c.name)}</span>
         <span style="font-size:12px;opacity:0.85">المحفظ: ${c.teacher} | الحضور: ${c.attRate}%</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11.5px">
@@ -5349,7 +5387,7 @@ function printDonorReport(donorName) {
         </tr></thead>
         <tbody>
           ${(c.students||[]).map((s,i) => `<tr style="background:${i%2===0?'#f9f9f9':'white'}">
-            <td style="padding:7px 10px;border:1px solid #ddd;font-weight:600">${s.name}</td>
+            <td style="padding:7px 10px;border:1px solid #ddd;font-weight:600">${h(s.name)}</td>
             <td style="padding:7px 10px;border:1px solid #ddd;text-align:center;color:${s.attRate>=80?'#1d6b3a':s.attRate>=60?'#a66a0c':'#a3262b'};font-weight:700">${s.attRate}%</td>
             <td style="padding:7px 10px;border:1px solid #ddd;text-align:center">${s.verses} آية (${s.sessions} جلسة)</td>
             <td style="padding:7px 10px;border:1px solid #ddd;text-align:center">${s.beh}/5</td>
@@ -5465,8 +5503,8 @@ async function loadNotifications() {
     <div class="notif-item ${n.is_read ? '' : 'unread'}" onclick="openNotif('${n.id}','${n.related_id||''}')">
       <div class="notif-icon">${n.type === 'monthly_report' ? '📋' : '🔔'}</div>
       <div class="notif-text">
-        <div class="notif-title">${n.title}</div>
-        <div class="notif-body-text">${n.body}</div>
+        <div class="notif-title">${h(n.title)}</div>
+        <div class="notif-body-text">${h(n.body)}</div>
         <div class="notif-time">${formatTime(n.created_at)} · ${n.from_user?.full_name||'النظام'}</div>
       </div>
     </div>`).join('');
@@ -5974,7 +6012,7 @@ function shareCompareWA() {
   if (!_cmpData || !_cmpData.stats.length) { alert('لا توجد بيانات للإرسال'); return; }
   const medals = ['🥇','🥈','🥉'];
   const lines = _cmpData.stats.map((cs,i) =>
-    `${medals[i] || (i+1)+'.'} *${cs.circle.name}*${cs.circle.teacher_name?' — الشيخ '+cs.circle.teacher_name:''}\n   المجموع: *${cs.total.toFixed(1)}/15* | حضور ${cs.attRate}% | حفظ ${cs.memoAvg.toFixed(1)} | سلوك ${cs.behAvg.toFixed(1)}`
+    `${medals[i] || (i+1)+'.'} *${h(cs.circle.name)}*${cs.circle.teacher_name?' — الشيخ '+cs.circle.teacher_name:''}\n   المجموع: *${cs.total.toFixed(1)}/15* | حضور ${cs.attRate}% | حفظ ${cs.memoAvg.toFixed(1)} | سلوك ${cs.behAvg.toFixed(1)}`
   ).join('\n\n');
   const msg = `🏆 *لوحة المنافسة بين الحلقات*\nجمعية آيات الخيرية\n📅 الفترة: ${_cmpData.label}\n\n${lines}\n\n﴿ وَفِي ذَٰلِكَ فَلْيَتَنَافَسِ الْمُتَنَافِسُونَ ﴾\nبارك الله في جهودكم وجعلها في ميزان حسناتكم 🌟`;
   window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
@@ -6065,7 +6103,7 @@ async function initWeeklyReport() {
   if (circleSel) {
     const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id).order('name');
     if (circles?.length) {
-      circleSel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      circleSel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
       if (circles.length === 1) {
         circleSel.value = circles[0].id;
         document.getElementById('weekly-circle-wrap').style.display = 'none';
@@ -6136,8 +6174,8 @@ async function generateWeeklyReport() {
   const studentsHtml = studentData.map(s => `
     <div class="student-report-row">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-        <div style="font-weight:700">${s.name}</div>
-        ${s.phone ? `<button onclick="sendWeeklyWA('${s.phone}','${s.name.replace(/'/g,"\\'")}',${s.present},${s.absent},${s.excused},${s.memoSessions},${s.memoVerses},'${s.memoMastery}','${s.behAvg}','${startDate}','${endDate}','${s.circle_id}')"
+        <div style="font-weight:700">${h(s.name)}</div>
+        ${s.phone ? `<button onclick="sendWeeklyWA('${esc(s.phone)}','${s.name.replace(/'/g,"\\'")}',${s.present},${s.absent},${s.excused},${s.memoSessions},${s.memoVerses},'${s.memoMastery}','${s.behAvg}','${startDate}','${endDate}','${s.circle_id}')"
           style="padding:5px 12px;background:#25D366;color:white;border:none;border-radius:20px;cursor:pointer;font-size:11px;font-family:'Cairo',sans-serif;font-weight:700">
           📱 إرسال لولي الأمر
         </button>` : '<span style="font-size:11px;color:var(--mid)">لا يوجد هاتف</span>'}
@@ -6218,7 +6256,7 @@ async function initMonthlyReport() {
   if (circleSel) {
     const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id).order('name');
     if (circles?.length) {
-      circleSel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      circleSel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
       // إذا كانت حلقة واحدة فقط اختارها تلقائياً
       if (circles.length === 1) circleSel.value = circles[0].id;
       // إخفاء القائمة إذا كان لديه حلقة واحدة فقط
@@ -6357,8 +6395,8 @@ function renderReportPreview(data, month, year, reportId, status) {
   let studentsHtml = data.students.map(s => `
     <div class="student-report-row">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-        <div style="font-weight:700;min-width:140px">${s.name}</div>
-        ${s.phone ? `<button onclick="sendStudentWA('${s.phone}','${s.name.replace(/'/g,"\\'")}',${s.present},${s.absent},${s.memoVerses},'${(s.memoFrom||'').replace(/'/g,"\\'")}','${(s.memoTo||'').replace(/'/g,"\\'")}',${s.reviewSessions},'${data.month||''}','${data.year||''}')"
+        <div style="font-weight:700;min-width:140px">${h(s.name)}</div>
+        ${s.phone ? `<button onclick="sendStudentWA('${esc(s.phone)}','${s.name.replace(/'/g,"\\'")}',${s.present},${s.absent},${s.memoVerses},'${(s.memoFrom||'').replace(/'/g,"\\'")}','${(s.memoTo||'').replace(/'/g,"\\'")}',${s.reviewSessions},'${data.month||''}','${data.year||''}')"
           style="padding:5px 12px;background:#25D366;color:white;border:none;border-radius:20px;cursor:pointer;font-size:11px;font-family:'Cairo',sans-serif;font-weight:700;white-space:nowrap">
           📱 واتساب
         </button>` : '<span style="font-size:11px;color:var(--mid)">لا يوجد هاتف</span>'}
@@ -6435,7 +6473,7 @@ async function submitMonthlyReport(reportId, month, year) {
     for (const sid of supIds) {
       await sendNotification(sid,
         `📋 تقرير شهري جديد — ${MONTHS_AR[month]} ${year}`,
-        `رفع ${CP.full_name} التقرير الشهري لشهر ${MONTHS_AR[month]} ${year}`,
+        `رفع ${h(CP.full_name)} التقرير الشهري لشهر ${MONTHS_AR[month]} ${year}`,
         'monthly_report', reportId);
     }
   }
@@ -6445,7 +6483,7 @@ async function submitMonthlyReport(reportId, month, year) {
   for (const a of (admins||[])) {
     await sendNotification(a.id,
       `📋 تقرير شهري جديد — ${MONTHS_AR[month]} ${year}`,
-      `رفع ${CP.full_name} التقرير الشهري لشهر ${MONTHS_AR[month]} ${year}`,
+      `رفع ${h(CP.full_name)} التقرير الشهري لشهر ${MONTHS_AR[month]} ${year}`,
       'monthly_report', reportId);
   }
 
@@ -6545,7 +6583,7 @@ async function printMonthlyReport(reportId, teacherName, month, year) {
   const studentsRows = (d.students||[]).map((s,i) => `
     <tr style="background:${i%2===0?'#f5f5f5':'white'}">
       <td style="padding:8px 10px;font-size:11px">${i+1}</td>
-      <td style="padding:8px 10px;font-size:11px;font-weight:600">${s.name}</td>
+      <td style="padding:8px 10px;font-size:11px;font-weight:600">${h(s.name)}</td>
       <td style="padding:8px 10px;text-align:center;font-size:11px">${s.present||0}</td>
       <td style="padding:8px 10px;text-align:center;font-size:11px">${s.absent||0}</td>
       <td style="padding:8px 10px;text-align:center;font-size:11px">${s.memoVerses||0}</td>
@@ -6625,7 +6663,7 @@ function showReportModal(r) {
 
   let studentsHtml = (d.students||[]).map(s => `
     <div class="student-report-row">
-      <div style="font-weight:700;min-width:140px">${s.name}</div>
+      <div style="font-weight:700;min-width:140px">${h(s.name)}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span class="badge be">✓ ${s.present} حاضر</span>
         <span class="badge ba">✗ ${s.absent} غائب</span>
