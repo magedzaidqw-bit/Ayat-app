@@ -372,10 +372,11 @@ create policy teacher_insert_own_weekly_send on public.weekly_report_sends for i
 
 -- ========== التخزين (صور الطلاب والهويات) ==========
 -- ملاحظة: الحاويتان عامتان لأن البرنامج يحفظ روابط عامة للصور. يُنصح لاحقاً بالتحويل إلى روابط موقّعة.
-insert into storage.buckets (id, name, public) values ('civil-ids','civil-ids',true), ('student-photos','student-photos',true)
+insert into storage.buckets (id, name, public) values ('civil-ids','civil-ids',false), ('student-photos','student-photos',true)
   on conflict (id) do nothing;
 
 create policy "Auth upload civil-ids" on storage.objects for insert with check (bucket_id = 'civil-ids' and auth.role() = 'authenticated');
 create policy "Auth upload student-photos" on storage.objects for insert with check (bucket_id = 'student-photos' and auth.role() = 'authenticated');
 create policy "Staff read civil-ids" on storage.objects for select using (bucket_id = 'civil-ids' and is_staff());
+create policy "Staff delete civil-ids" on storage.objects for delete to authenticated using (bucket_id = 'civil-ids' and is_staff());
 create policy "Staff read student-photos" on storage.objects for select using (bucket_id = 'student-photos' and is_staff());
