@@ -709,7 +709,9 @@ document.getElementById('enter-btn').addEventListener('click', function() {
         switchAuthTab('teacher');
         document.getElementById('tab-teacher').click();
       }
-    }, 200);
+      // الضغط على «دخول» حركة من المستخدم، فنطلب البصمة مباشرة دون زر إضافي
+      biometricAvailable().then(ok => { if (ok && hasSavedBiometric()) doBiometricLogin(); });
+    }, 250);
   }
 });
 
@@ -916,7 +918,8 @@ async function registerBiometric() {
 async function doBiometricLogin() {
   const saved = getSavedBiometric();
   if (!saved) return;
-  const btn = document.getElementById('biometric-login-btn');
+  const btn = document.getElementById(authMode === 'admin' ? 'biometric-admin-login-btn' : 'biometric-login-btn') || document.createElement('button');
+  const btnHtml = btn.innerHTML;
   btn.disabled = true; btn.innerHTML = '<span style="font-size:22px">⏳</span> جارٍ التحقق...';
   try {
     const challenge = new Uint8Array(32);
