@@ -4,4 +4,3 @@
 
 ## قبل التشغيل (قيم يجب استبدالها)
 - `index.html` و`donate.html`: `SB_URL` و`SB_KEY` بقيم مشروع Supabase الخاص بآيات.
-- `donate.html`: `REPLACE_WITH_AYAT_DONATE_URL` برابط صفحة التبرع في موقع آيات.
