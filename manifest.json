@@ -1,0 +1,17 @@
+{
+  "name": "جمعية آيات الخيرية - إدارة حلقات تحفيظ القرآن الكريم",
+  "short_name": "آيات",
+  "description": "نظام إدارة حلقات تحفيظ القرآن الكريم - جمعية آيات الخيرية",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d2818",
+  "theme_color": "#0d2818",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {"src": "ayat-logo-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "ayat-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}

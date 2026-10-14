@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>جمعية آيات الخيرية — ادعم حلقات تحفيظ القرآن الكريم</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --gd:#0a1e12; --gd2:#112d1c; --gm:#1a5230; --gl:#3d9e6a;
+    --gold:#c9a153; --gold2:#e8cd8a; --cream:#fff8e7;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:'Tajawal', Arial, sans-serif;
+    background:var(--cream);
+    color:var(--gd);
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  header{ padding:28px 20px 20px; text-align:center; }
+  .logo-ring{
+    width:64px; height:64px; margin:0 auto 10px;
+    border-radius:50%; border:2px solid var(--gold); overflow:hidden; background:var(--gd);
+  }
+  .logo-ring img{width:100%;height:100%;object-fit:cover;}
+  header .brand{
+    font-family:'Amiri', serif; font-weight:700; font-size:22px; color:var(--gm); letter-spacing:1px;
+  }
+
+  .arch-hero{
+    position:relative; max-width:640px; margin:10px auto 0; padding:56px 24px 40px; text-align:center;
+  }
+  .arch-hero::before{
+    content:''; position:absolute; inset:0;
+    border:3px solid var(--gm); border-bottom:none;
+    border-radius:140px 140px 0 0 / 90px 90px 0 0; opacity:0.12;
+  }
+  .arch-hero h1{
+    font-family:'Amiri', serif; font-weight:700; font-size:clamp(26px, 5vw, 38px);
+    line-height:1.55; color:var(--gm); margin-bottom:14px;
+  }
+  .arch-hero h1 .accent{color:var(--gold);}
+  .arch-hero p{ font-size:16px; color:#556; line-height:1.9; max-width:460px; margin:0 auto; }
+
+  .stats{
+    max-width:900px; margin:36px auto; padding:0 20px;
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:16px;
+  }
+  @media (max-width:640px){ .stats{grid-template-columns:1fr; gap:14px;} }
+  .stat-card{
+    background:#fff; border-radius:18px; padding:26px 16px; text-align:center;
+    box-shadow:0 6px 24px rgba(10,30,18,0.08); border-top:4px solid var(--gold);
+    opacity:0; transform:translateY(14px); animation:riseIn 0.6s ease forwards;
+  }
+  .stat-card:nth-child(1){animation-delay:0.05s;}
+  .stat-card:nth-child(2){animation-delay:0.2s;}
+  .stat-card:nth-child(3){animation-delay:0.35s;}
+  @keyframes riseIn{ to{opacity:1; transform:translateY(0);} }
+
+  .stat-num{
+    font-family:'Amiri', serif; font-weight:700; font-size:clamp(30px, 6vw, 44px);
+    color:var(--gm); line-height:1; margin-bottom:8px; direction:ltr; unicode-bidi:isolate;
+  }
+  .stat-label{ font-size:14px; color:#778; font-weight:500; }
+
+  .cta-section{ max-width:560px; margin:20px auto 50px; padding:0 20px; text-align:center; }
+  .cta-btn{
+    display:inline-block; background:linear-gradient(135deg, var(--gold2), var(--gold));
+    color:var(--gd); font-weight:900; font-size:19px; padding:18px 52px; border-radius:100px;
+    text-decoration:none; box-shadow:0 10px 30px rgba(201,161,83,0.35);
+    transition:transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .cta-btn:hover, .cta-btn:focus-visible{
+    transform:translateY(-3px); box-shadow:0 14px 36px rgba(201,161,83,0.45);
+    outline:3px solid var(--gm); outline-offset:3px;
+  }
+  .cta-note{ margin-top:16px; font-size:13px; color:#8a93a3; }
+
+  footer{
+    text-align:center; padding:24px 20px 36px; color:var(--gm);
+    font-family:'Amiri', serif; font-size:15px; opacity:0.85;
+  }
+  footer .divider{ width:80px; height:2px; background:var(--gold); margin:0 auto 14px; }
+
+  .loading-dot{
+    display:inline-block; width:8px; height:8px; border-radius:50%;
+    background:var(--gold); animation:pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:0.3;} 50%{opacity:1;} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-ring">
+    <img src="ayat-logo.png" alt="جمعية آيات الخيرية" onerror="this.parentElement.style.display='none'">
+  </div>
+  <div class="brand">جمعية آيات الخيرية</div>
+</header>
+
+<section class="arch-hero">
+  <h1>كل <span class="accent">حرفٍ</span> يُحفظ اليوم،<br>بدعمكم يُصبح <span class="accent">جيلاً</span> يحمل القرآن</h1>
+  <p>تابعوا أثر تبرعاتكم لحظياً — هذه أرقام حقيقية من حلقات تحفيظ القرآن الكريم التي تدعمونها.</p>
+</section>
+
+<section class="stats" id="stats-container">
+  <div class="stat-card">
+    <div class="stat-num" id="stat-circles"><span class="loading-dot"></span></div>
+    <div class="stat-label">حلقة تحفيظ نشطة</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="stat-students"><span class="loading-dot"></span></div>
+    <div class="stat-label">طالب وطالبة</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="stat-verses"><span class="loading-dot"></span></div>
+    <div class="stat-label">آية مُحفَّظة هذا الشهر</div>
+  </div>
+</section>
+
+<p style="text-align:center; font-size:12px; color:#9aa3b3; max-width:500px; margin:-16px auto 0; padding:0 20px">
+  * إحصائية "الآيات المحفَّظة" تُحتسب للشهر الحالي وتتجدد أول كل شهر
+</p>
+
+<section class="cta-section">
+  <p style="font-family:'Amiri', serif; font-size:19px; color:var(--gm); font-weight:700; margin-bottom:22px; line-height:1.8">
+    بفضل الله ثم عطائك.. الآيات تُرتل والعداد لا يتوقف
+  </p>
+  <a href="REPLACE_WITH_AYAT_DONATE_URL" id="donate-btn" class="cta-btn" target="_blank" rel="noopener">
+    تبرع الآن
+  </a>
+  <div class="cta-note">سيتم تحويلكم لموقع الجمعية لإتمام التبرع بأمان</div>
+</section>
+
+<footer>
+  <div class="divider"></div>
+  جمعية آيات الخيرية
+</footer>
+
+<script>
+const SB_URL = 'https://REPLACE_WITH_AYAT_PROJECT.supabase.co';
+const SB_KEY = 'REPLACE_WITH_AYAT_ANON_KEY';
+const sb = window.supabase.createClient(SB_URL, SB_KEY);
+
+function animateCount(el, target, suffix = '') {
+  if (target === 0) { el.textContent = '0' + suffix; return; }
+  const duration = 1200;
+  const start = performance.now();
+  function tick(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.floor(eased * target).toLocaleString('en-US') + suffix;
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+async function loadStats() {
+  try {
+    const { data, error } = await sb.rpc('public_stats');
+    if (error) throw error;
+    animateCount(document.getElementById('stat-circles'), data.circles_count || 0);
+    animateCount(document.getElementById('stat-students'), data.students_count || 0);
+    animateCount(document.getElementById('stat-verses'), data.total_verses_memorized || 0);
+  } catch (e) {
+    document.getElementById('stat-circles').textContent = '—';
+    document.getElementById('stat-students').textContent = '—';
+    document.getElementById('stat-verses').textContent = '—';
+    console.error('تعذر تحميل الإحصائيات:', e);
+  }
+}
+loadStats();
+</script>
+
+</body>
+</html>
