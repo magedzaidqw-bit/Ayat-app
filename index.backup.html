@@ -1252,7 +1252,7 @@ function loadPage(id) {
     dashboard: loadDash, circles: loadCircles, teachers: loadTeachers,
     supervisors: loadSupervisors, students: loadStudents, attendance: initAtt,
     memorization: () => { loadMemo(); populateMemoStudents(); populateMemoCircleFilter(); },
-    behavior: () => { loadBehavior(); populateStudentsForRole('beh-student'); populateSel('beh-circle', CP.role==='teacher'?null:'circles').then(()=>{ if(CP.role==='teacher') sb.from('circles').select('id,name').eq('teacher_id',CU.id).then(({data})=>{ const s=document.getElementById('beh-circle'); if(s&&data) { s.innerHTML='<option value="">اختر الحلقة</option>'+data.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join(''); if(data.length===1){s.value=data[0].id;loadBehStudents();} } }); }); },
+    behavior: () => { loadBehavior(); populateStudentsForRole('beh-student'); populateSel('beh-circle', CP.role==='teacher'?null:'circles').then(()=>{ if(CP.role==='teacher') sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).then(({data})=>{ const s=document.getElementById('beh-circle'); if(s&&data) { s.innerHTML='<option value="">اختر الحلقة</option>'+data.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join(''); if(data.length===1){s.value=data[0].id;loadBehStudents();} } }); }); },
     evaluations: loadEvals, top3: loadTop3, parent: loadParent,
     'teacher-home': loadTeacherHome, 'sup-home': loadActivity, 'sup-compare': loadSupCompare,
     'weekly-report': initWeeklyReport, 'monthly-report': initMonthlyReport, 'reports-view': initReportsView,
@@ -1519,6 +1519,7 @@ function buildModals() {
   <div class="mb">
     <div class="fg"><label>اسم الحلقة</label><input type="text" id="c-name" placeholder="مثل: حلقة الفجر"></div>
     <div class="fg"><label>المحفظ</label><select id="c-teacher"><option value="">اختر محفظاً</option></select></div>
+    <div class="fg"><label>محفظ مشارك (اختياري — يرى طلاب الحلقة ويسجّل لهم كالمحفظ)</label><select id="c-coteacher"><option value="">— لا يوجد —</option></select></div>
     <div class="fg"><label>الموعد</label>
       <div style="display:flex;align-items:center;gap:8px;background:var(--gray);border-radius:12px;padding:10px 14px;border:1.5px solid var(--gray2)">
         <span style="color:var(--mid);font-size:13px;white-space:nowrap">من الأحد إلى الأربعاء —</span>
@@ -2059,11 +2060,11 @@ async function deleteStudentCivilId(studentId, photoUrl) {
 }
 
 async function populateModals(id) {
-  if (id==='m-circle') await populateSel('c-teacher','teachers');
+  if (id==='m-circle') { await populateSel('c-teacher','teachers'); const ct = document.getElementById('c-coteacher'); if (ct) ct.innerHTML = '<option value="">— لا يوجد —</option>' + document.getElementById('c-teacher').innerHTML.replace('<option value="">اختر محفظاً</option>',''); }
   if (id==='m-student') {
     if (CP.role === 'teacher') {
       // المحفظ يرى حلقاته فقط
-      const { data } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id).order('name');
+      const { data } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).order('name');
       const sel = document.getElementById('s-circle');
       if (sel) {
         sel.innerHTML = '<option value="">اختر الحلقة</option>' + (data?.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('')||'');
@@ -2159,16 +2160,19 @@ async function loadCircles() {
   const { data } = await sb.from('circles').select('*').order('name');
   const { data: st } = await sb.from('students').select('circle_id');
   const cnt = {}; st?.forEach(s=>cnt[s.circle_id]=(cnt[s.circle_id]||0)+1);
+  const coNames = {};
+  const coIds = [...new Set((data||[]).map(c => c.co_teacher_id).filter(Boolean))];
+  if (coIds.length) { const { data: cp } = await sb.from('profiles').select('id,full_name').in('id', coIds); (cp||[]).forEach(x => coNames[x.id] = x.full_name); }
   const b = document.getElementById('circles-body');
   b.innerHTML = data?.length ? data.map((c,i)=>`<tr>
     <td style="color:var(--mid);font-weight:700">${i+1}</td>
     <td><strong>${h(c.name)}</strong></td>
-    <td>${c.teacher_name || '—'}</td>
+    <td>${c.teacher_name || '—'}${c.co_teacher_id && coNames[c.co_teacher_id] ? '<br><small style="color:#14568f">+ مشارك: ' + h(coNames[c.co_teacher_id]) + '</small>' : ''}</td>
     <td>${c.schedule||'—'}</td>
     <td>${c.location||'—'}</td>
     <td><span class="badge be">${cnt[c.id]||0} طالب</span></td>
     <td>
-      <button class="btn btn-o btn-sm" onclick="editCircle('${c.id}','${esc(c.name)}','','${esc(c.schedule||'')}','${esc(c.location||'')}')">✏️</button>
+      <button class="btn btn-o btn-sm" onclick="editCircle('${c.id}','${esc(c.name)}','${c.teacher_id||''}','${esc(c.schedule||'')}','${esc(c.location||'')}','${c.co_teacher_id||''}')">✏️</button>
       <button class="btn btn-r btn-sm" onclick="delCircle('${c.id}')">حذف</button>
     </td></tr>`).join('') : emptyRow(7,'لا توجد حلقات — تأكد من الاتصال بقاعدة البيانات');
 }
@@ -2182,7 +2186,7 @@ function resetCircleForm() {
   document.getElementById('c-location').value = '';
   openM('m-circle');
 }
-function editCircle(id,name,teacherId,schedule,location) {
+function editCircle(id,name,teacherId,schedule,location,coTeacherId) {
   editingCircleId = id;
   document.getElementById('c-name').value = name;
   // استخراج الوقت فقط (للتوافق مع البيانات القديمة)
@@ -2190,7 +2194,7 @@ function editCircle(id,name,teacherId,schedule,location) {
   document.getElementById('c-schedule').value = timeOnly;
   document.getElementById('c-location').value = location;
   openM('m-circle');
-  setTimeout(()=>{ document.getElementById('c-teacher').value = teacherId; }, 300);
+  setTimeout(()=>{ document.getElementById('c-teacher').value = teacherId || ''; const ct = document.getElementById('c-coteacher'); if (ct) ct.value = coTeacherId || ''; }, 400);
   document.querySelector('#m-circle .mh h3').textContent = 'تعديل حلقة';
   document.querySelector('#m-circle .btn-pri').textContent = 'حفظ التعديل';
 }
@@ -2200,12 +2204,12 @@ async function saveCircle() {
   if(!scheduleTime){alert('اختر وقت الحلقة');return;}
   const schedule = scheduleTime; // نحفظ الوقت فقط
   if (editingCircleId) {
-    await sb.from('circles').update({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,schedule,location}).eq('id', editingCircleId);
+    await sb.from('circles').update({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location}).eq('id', editingCircleId);
     editingCircleId = null;
     document.querySelector('#m-circle .mh h3').textContent = 'إضافة حلقة';
     document.querySelector('#m-circle .btn-pri').textContent = 'حفظ';
   } else {
-    await sb.from('circles').insert({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,schedule,location});
+    await sb.from('circles').insert({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location});
   }
   closeM('m-circle'); loadCircles();
 }
@@ -2373,7 +2377,7 @@ async function populateStudentsForRole(selId, circleFilterSelId) {
     if (filterCircleId) {
       ids = [filterCircleId];
     } else {
-      const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
+      const { data: circles } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
       ids = circles?.map(c => c.id) || [];
     }
     if (ids.length) {
@@ -2426,7 +2430,7 @@ async function populateMemoCircleFilter() {
   const sel = document.getElementById('memo-circle');
   if (!sel) return;
   if (CP.role === 'teacher') {
-    const { data } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
+    const { data } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
     sel.innerHTML = '<option value="">جميع الحلقات</option>' + (data||[]).map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
     if (data?.length === 1) sel.value = data[0].id;
   } else {
@@ -2620,7 +2624,7 @@ async function loadStudents() {
     // المحفظ والمشرف يريان طلاب حلقاتهم فقط
     let myCircles;
     if (CP.role === 'teacher') {
-      const { data } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
+      const { data } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
       myCircles = data;
     } else {
       const { data } = await sb.from('supervisor_circles').select('circle_id,circles(id,name)').eq('supervisor_id', CU.id);
@@ -2716,7 +2720,7 @@ async function editStudent(id) {
   // مهم: ننتظر تحميل واختيار الحلقة الصحيحة قبل فتح النافذة، لتفادي أي احتمال
   // لحفظ الطالب بدون حلقة (circle_id فارغ) إذا كانت الشبكة بطيئة أو المستخدم سريعًا في الحفظ
   if (CP.role === 'teacher') {
-    const { data } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id).order('name');
+    const { data } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).order('name');
     const sel = document.getElementById('s-circle');
     if (sel) {
       sel.innerHTML = '<option value="">اختر الحلقة</option>' + (data?.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join('')||'');
@@ -2817,7 +2821,7 @@ async function saveStudent() {
   let targetCircle = circle;
   if (CP.role === 'teacher' && !targetCircle) {
     // .single() كان يفشل إذا كان للمحفظ أكثر من حلقة، فيُحفظ الطالب بلا حلقة ويُرفض من الصلاحيات
-    const { data: myCircles } = await sb.from('circles').select('id').eq('teacher_id', CU.id);
+    const { data: myCircles } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
     if (myCircles && myCircles.length === 1) targetCircle = myCircles[0].id;
   }
   if (CP.role === 'teacher' && !targetCircle) {
@@ -2882,7 +2886,7 @@ async function initAtt() {
   document.getElementById('att-date').value = today();
   const sel = document.getElementById('att-circle');
   if (CP.role === 'teacher') {
-    const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
+    const { data: circles } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
     if (circles?.length) {
       sel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
       if (circles.length === 1) { sel.value = circles[0].id; loadAttStudents(); }
@@ -3056,7 +3060,7 @@ async function printMemoHistory() {
     const { data: cs } = await sb.from('students').select('id').eq('circle_id', circleId);
     sids = cs?.map(s=>s.id) || [];
   } else if (CP.role === 'teacher') {
-    const { data: mc } = await sb.from('circles').select('id').eq('teacher_id', CU.id);
+    const { data: mc } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
     const cids = mc?.map(c=>c.id) || [];
     if (cids.length) {
       const { data: cs } = await sb.from('students').select('id').in('circle_id', cids);
@@ -3267,7 +3271,7 @@ async function saveAtt() {
 async function loadAttHist() {
   let q = sb.from('attendance').select('*,students(full_name),circles(name)').order('date',{ascending:false}).limit(50);
   if (CP.role === 'teacher') {
-    const { data: myCircle } = await sb.from('circles').select('id').eq('teacher_id', CU.id).single();
+    const { data: myCircle } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).single();
     if (myCircle) q = q.eq('circle_id', myCircle.id);
   }
   const { data } = await q;
@@ -3302,7 +3306,7 @@ async function openBulkReview() {
   openM('m-bulk-review');
   let q = sb.from('students').select('id,full_name,circle_id').order('full_name');
   if (CP.role === 'teacher') {
-    const { data: mc } = await sb.from('circles').select('id').eq('teacher_id', CU.id);
+    const { data: mc } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
     const cids = mc?.map(c=>c.id)||[];
     if (cids.length) q = q.in('circle_id', cids);
   }
@@ -3349,7 +3353,7 @@ async function openBulkHifz() {
   openM('m-bulk-hifz');
   let q = sb.from('students').select('id,full_name,circle_id').order('full_name');
   if (CP.role === 'teacher') {
-    const { data: mc } = await sb.from('circles').select('id').eq('teacher_id', CU.id);
+    const { data: mc } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
     const cids = mc?.map(c=>c.id)||[];
     if (cids.length) q = q.in('circle_id', cids);
   }
@@ -3413,7 +3417,7 @@ async function openQuick() {
   document.getElementById('qk-rows').innerHTML = '<div style="color:#999;padding:20px;text-align:center">جاري التحميل...</div>';
   openM('m-quick');
   let q = sb.from('circles').select('id,name').order('name');
-  if (CP.role === 'teacher') q = q.eq('teacher_id', CU.id);
+  if (CP.role === 'teacher') q = q.or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
   const { data: cs } = await q;
   sel.innerHTML = (cs||[]).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   const pre = document.getElementById('memo-circle')?.value;
@@ -3719,7 +3723,7 @@ async function loadMemo() {
       // احترام الحلقة المختارة تحديدًا من القائمة المنسدلة، دون عرض حلقات المحفّظ الأخرى
       myCircleIds = [selectedCircleId];
     } else {
-      const { data: myCircles } = await sb.from('circles').select('id').eq('teacher_id', CU.id);
+      const { data: myCircles } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
       myCircleIds = myCircles?.map(c=>c.id) || [];
     }
     const { data: myStudents } = await sb.from('students').select('id').in('circle_id', myCircleIds);
@@ -3961,7 +3965,7 @@ async function loadBehavior() {
   const { data } = await q;
   let rows = data || [];
   if (CP.role === 'teacher') {
-    const { data: myCircles } = await sb.from('circles').select('id').eq('teacher_id', CU.id);
+    const { data: myCircles } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
     const myCircleIds = myCircles?.map(c=>c.id)||[];
     rows = rows.filter(r => myCircleIds.includes(r.students?.circle_id));
   }
@@ -4546,7 +4550,7 @@ async function loadTop3() {
   const sel = document.getElementById('top3-circle');
   if (sel && sel.options.length <= 1) {
     if (CP.role === 'teacher') {
-      const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
+      const { data: circles } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
       if (circles?.length) {
         sel.innerHTML = '<option value="">اختر حلقة لعرض فرسانها</option>' + circles.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
         if (circles.length === 1) sel.value = circles[0].id;
@@ -4947,7 +4951,7 @@ async function loadParent() {
 
 // ===================== TEACHER HOME =====================
 async function loadTeacherHome() {
-  const { data: circles } = await sb.from('circles').select('*').eq('teacher_id', CU.id);
+  const { data: circles } = await sb.from('circles').select('*').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
   const c = document.getElementById('teacher-content');
   if (!circles?.length) { c.innerHTML = emptyDiv('🕌','لم يتم تعيينك في حلقة بعد. تواصل مع المدير.'); return; }
 
@@ -5135,7 +5139,7 @@ async function sendWeeklyReportWA() {
   if (!confirm('سيتم فتح واتساب لكل ولي أمر لديه رقم مسجل. هل تريد المتابعة؟')) return;
 
   // جلب طلاب المحفظ مع بيانات الأهالي
-  const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
+  const { data: circles } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
   if (!circles?.length) { alert('لا توجد حلقات مرتبطة بحسابك'); return; }
   const circleIds = circles.map(c=>c.id);
   const { data: students } = await sb.from('students').select('*').in('circle_id', circleIds).order('full_name');
@@ -6488,7 +6492,7 @@ async function initWeeklyReport() {
   // ملء قائمة الحلقات
   const circleSel = document.getElementById('weekly-circle');
   if (circleSel) {
-    const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id).order('name');
+    const { data: circles } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).order('name');
     if (circles?.length) {
       circleSel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
       if (circles.length === 1) {
@@ -6510,7 +6514,7 @@ async function generateWeeklyReport() {
   preview.innerHTML = '<div class="empty"><div class="ei">⏳</div><p>جارٍ جمع البيانات...</p></div>';
 
   // جلب الحلقات
-  const { data: allCircles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
+  const { data: allCircles } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
   if (!allCircles?.length) { preview.innerHTML = emptyDiv('🕌','لم يتم تعيينك في حلقة'); return; }
 
   let circles;
@@ -6641,7 +6645,7 @@ async function initMonthlyReport() {
   // ملء قائمة الحلقات
   const circleSel = document.getElementById('report-circle');
   if (circleSel) {
-    const { data: circles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id).order('name');
+    const { data: circles } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).order('name');
     if (circles?.length) {
       circleSel.innerHTML = '<option value="">اختر الحلقة</option>' + circles.map(c => `<option value="${c.id}">${h(c.name)}</option>`).join('');
       // إذا كانت حلقة واحدة فقط اختارها تلقائياً
@@ -6664,7 +6668,7 @@ async function generateMonthlyReport() {
   preview.innerHTML = '<div class="empty"><div class="ei">⏳</div><p>جارٍ جمع البيانات...</p></div>';
 
   // جلب حلقات المحفظ
-  const { data: allCircles } = await sb.from('circles').select('id,name').eq('teacher_id', CU.id);
+  const { data: allCircles } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
   if (!allCircles?.length) { preview.innerHTML = emptyDiv('🕌','لم يتم تعيينك في حلقة'); return; }
 
   // استخدام الحلقة المختارة فقط إذا كان هناك أكثر من حلقة
@@ -6850,7 +6854,7 @@ async function submitMonthlyReport(reportId, month, year) {
     .select('*').single();
 
   // إرسال إشعارات للمشرفين والمدير
-  const { data: myCircles } = await sb.from('circles').select('id').eq('teacher_id', CU.id);
+  const { data: myCircles } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
   const circleIds = myCircles?.map(c => c.id) || [];
 
   // المشرفون المرتبطون بهذه الحلقات

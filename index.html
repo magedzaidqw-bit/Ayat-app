@@ -1331,7 +1331,7 @@ function buildPages() {
     <div class="card"><div class="cb">
       <div class="fgrid" style="margin-bottom:16px">
         <div class="fg"><label>الحلقة</label><select id="att-circle" onchange="loadAttStudents()"><option value="">اختر الحلقة</option></select></div>
-        <div class="fg"><label>التاريخ</label><input type="date" id="att-date"></div>
+        <div class="fg"><label>التاريخ</label><input type="date" id="att-date" onchange="loadAttStudents()"></div>
       </div>
       <div id="att-list"><div class="empty"><div class="ei">👆</div><p>اختر الحلقة أولاً</p></div></div>
       <div id="att-save" style="display:none;margin-top:16px"><button class="btn btn-g" onclick="saveAtt()">💾 حفظ الحضور</button></div>
@@ -2988,6 +2988,17 @@ async function loadAttStudents() {
   // إحصائيات مباشرة
   updateAttStats(data.length);
   sv.style.display = 'block';
+  // تحميل ما سُجّل سابقاً لهذا اليوم (حتى لا يمحو محفظٌ ثانٍ في الحلقة حضورَ زميله)
+  try {
+    const dt = v('att-date');
+    if (dt) {
+      const { data: ex } = await sb.from('attendance').select('student_id,status').eq('circle_id', cid).eq('date', dt);
+      const rev = { present:'p', absent:'a', excused:'e' };
+      let n = 0;
+      (ex||[]).forEach(r => { if (rev[r.status] && attData[r.student_id] !== undefined) { setAttQuick(r.student_id, rev[r.status]); n++; } });
+      if (n) list.insertAdjacentHTML('afterbegin', `<div style="background:#e8f1fb;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#14568f;border-right:3px solid #14568f">ℹ️ تم تحميل الحضور المسجّل سابقاً لهذا اليوم (${n} طالب). عدّل ما تريد ثم احفظ.</div>`);
+    }
+  } catch(e) {}
 }
 
 function setAttQuick(sid, st) {
@@ -3260,10 +3271,23 @@ async function saveAtt() {
   if (!cid||!date) { alert('اختر الحلقة والتاريخ'); return; }
   try {
     const recs = Object.entries(attData).map(([student_id,status])=>({student_id,circle_id:cid,date,status,created_by:CU.id}));
-    const { error: delErr } = await sb.from('attendance').delete().eq('circle_id',cid).eq('date',date);
-    if (delErr) throw delErr;
-    const { error: insErr } = await sb.from('attendance').insert(recs);
-    if (insErr) throw insErr;
+    // تحديث الموجود وإضافة الناقص فقط (بدل المسح وإعادة الكتابة) لحماية تسجيل المحفظ الآخر في الحلقة المشتركة
+    const { data: ex, error: exErr } = await sb.from('attendance').select('id,student_id,status').eq('circle_id',cid).eq('date',date);
+    if (exErr) throw exErr;
+    const byStudent = {};
+    (ex||[]).forEach(r => { (byStudent[r.student_id] = byStudent[r.student_id] || []).push(r); });
+    const toInsert = [];
+    for (const r of recs) {
+      const cur = byStudent[r.student_id];
+      if (!cur || !cur.length) { toInsert.push(r); continue; }
+      if (cur[0].status !== r.status) {
+        const { error: upErr } = await sb.from('attendance').update({ status: r.status, created_by: CU.id }).eq('id', cur[0].id);
+        if (upErr) throw upErr;
+      }
+      // حذف أي تكرار قديم لنفس الطالب في نفس اليوم
+      for (const dup of cur.slice(1)) await sb.from('attendance').delete().eq('id', dup.id);
+    }
+    if (toInsert.length) { const { error: insErr } = await sb.from('attendance').insert(toInsert); if (insErr) throw insErr; }
     alert('✅ تم حفظ الحضور');
     loadAttHist();
   } catch(e) { showGlobalError('تعذر حفظ الحضور: ' + (e.message||'خطأ غير معروف')); }
@@ -3271,8 +3295,8 @@ async function saveAtt() {
 async function loadAttHist() {
   let q = sb.from('attendance').select('*,students(full_name),circles(name)').order('date',{ascending:false}).limit(50);
   if (CP.role === 'teacher') {
-    const { data: myCircle } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).single();
-    if (myCircle) q = q.eq('circle_id', myCircle.id);
+    const { data: myCircles } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
+    if (myCircles?.length) q = q.in('circle_id', myCircles.map(c => c.id));
   }
   const { data } = await q;
   const b = document.getElementById('att-hist');
