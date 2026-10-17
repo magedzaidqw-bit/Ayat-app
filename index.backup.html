@@ -1226,7 +1226,11 @@ function buildNav() {
 
 function goFirstPage() {
   const fp = CP.role==='admin' ? 'dashboard' : CP.role==='supervisor' ? 'sup-home' : CP.role==='teacher' ? 'teacher-home' : 'parent';
-  goPage(fp);
+  let lp = null;
+  try { lp = localStorage.getItem('turath_lastpage_' + CU.id); } catch(e) {}
+  goPage(lp && document.getElementById('nb-' + lp) ? lp : fp);
+  // إن وُجدت مسودة تسجيل سريع غير محفوظة (أُغلق التطبيق فجأة) نعيد فتحها
+  if ((CP.role === 'teacher' || CP.role === 'admin') && qkDraftGet()) setTimeout(() => { openQuick(); }, 600);
 }
 
 function goPage(id) {
@@ -1239,6 +1243,7 @@ function goPage(id) {
   const pg = document.getElementById('p-'+id), nb = document.getElementById('nb-'+id);
   if (pg) pg.classList.add('active');
   if (nb) nb.classList.add('active');
+  try { if (CU && nb) localStorage.setItem('turath_lastpage_' + CU.id, id); } catch(e) {}
   loadPage(id);
 }
 
@@ -3413,8 +3418,50 @@ async function openQuick() {
   sel.innerHTML = (cs||[]).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   const pre = document.getElementById('memo-circle')?.value;
   if (pre && (cs||[]).some(c => c.id === pre)) sel.value = pre;
+  const dr = qkDraftGet();
+  if (dr && (cs||[]).some(c => c.id === dr.circle)) { sel.value = dr.circle; if (dr.date) document.getElementById('qk-date').value = dr.date; }
   if (!(cs||[]).length) { document.getElementById('qk-rows').innerHTML = '<div style="color:#999;padding:20px;text-align:center">لا توجد حلقات</div>'; return; }
   await quickLoad();
+}
+// ===== مسودة التسجيل السريع: تُحفظ تلقائياً وتُسترجع إن أُغلق التطبيق فجأة (مكالمة، واتساب...) =====
+function qkDraftKey() { return 'qk_draft_' + (CU ? CU.id : ''); }
+function qkDraftGet() {
+  try {
+    const d = JSON.parse(localStorage.getItem(qkDraftKey()) || 'null');
+    if (!d || !d.data || Date.now() - d.ts > 12 * 3600 * 1000) return null;
+    return d;
+  } catch(e) { return null; }
+}
+function qkDraftSave() {
+  if (!_qk.ready || !CU) return;
+  try {
+    const data = {};
+    _qk.students.forEach(st => {
+      ['hifz', 'muraja'].forEach(kind => {
+        if (!v(`qk-${kind}-t-${st.id}`)) return;
+        (data[st.id] = data[st.id] || {})[kind] = {
+          s: v(`qk-${kind}-s-${st.id}`), f: v(`qk-${kind}-f-${st.id}`), t: v(`qk-${kind}-t-${st.id}`),
+          ts: v(`qk-${kind}-ts-${st.id}`), m: v(`qk-${kind==='hifz'?'mh':'mm'}-${st.id}`)
+        };
+      });
+    });
+    if (!Object.keys(data).length) { localStorage.removeItem(qkDraftKey()); return; }
+    localStorage.setItem(qkDraftKey(), JSON.stringify({ circle: v('qk-circle'), date: v('qk-date'), ts: Date.now(), data }));
+  } catch(e) {}
+}
+function qkDraftRestore() {
+  const d = qkDraftGet();
+  if (!d || d.circle !== v('qk-circle') || d.date !== v('qk-date')) return;
+  const set = (id, val) => { const e = document.getElementById(id); if (e && val != null) e.value = val; };
+  Object.keys(d.data).forEach(sid => {
+    if (!_qk.students.some(x => x.id === sid)) return;
+    Object.keys(d.data[sid]).forEach(kind => {
+      const x = d.data[sid][kind];
+      set(`qk-${kind}-s-${sid}`, x.s); set(`qk-${kind}-f-${sid}`, x.f); set(`qk-${kind}-t-${sid}`, x.t);
+      set(`qk-${kind}-ts-${sid}`, x.ts); set(`qk-${kind==='hifz'?'mh':'mm'}-${sid}`, x.m);
+      quickCnt(kind, sid);
+    });
+  });
 }
 function quickDirChange() {
   try { localStorage.setItem('qk_dir', v('qk-dir')); } catch(e) {}
@@ -3426,6 +3473,7 @@ async function quickLoad() {
   box.innerHTML = '<div style="color:#999;padding:20px;text-align:center">جاري تحميل الطلاب...</div>';
   const { data: studs } = await sb.from('students').select('id,full_name').eq('circle_id', cid).order('full_name');
   _qk.students = studs || [];
+  _qk.ready = false;
   _qk.last = { hifz: {}, muraja: {} }; _qk.sess = new Set();
   if (_qk.students.length) {
     const ids = _qk.students.map(s => s.id);
@@ -3465,6 +3513,8 @@ function quickRender() {
     ${block('hifz', s.id, '📖 حفظ', '#1a5230')}
     ${block('muraja', s.id, '🔄 مراجعة', '#14568f')}
   </div>`).join('');
+  qkDraftRestore();
+  _qk.ready = true;
   quickStatus();
 }
 // حالة اليوم: من غاب، ومن سُجّل له بالفعل، ومن لم يُسجَّل بعد (لتفادي نسيان طالب سمّع)
@@ -3487,6 +3537,7 @@ async function quickStatus() {
 }
 function quickFilled(sid) { return !!(v(`qk-hifz-t-${sid}`) || v(`qk-muraja-t-${sid}`)); }
 function quickMark() {
+  qkDraftSave();
   let filled = 0, done = 0, absent = 0, todo = 0;
   _qk.students.forEach(st => {
     const card = document.getElementById(`qk-card-${st.id}`), bd = document.getElementById(`qk-badge-${st.id}`);
@@ -3609,6 +3660,7 @@ async function quickSave() {
 function quickUnsaved() { return _qk.students.some(st => quickFilled(st.id)); }
 function quickClose() {
   if (quickUnsaved() && !confirm('يوجد تسجيل أدخلته ولم تحفظه بعد. هل تريد إغلاق الشاشة وتجاهله؟')) return;
+  try { localStorage.removeItem(qkDraftKey()); } catch(e) {}
   closeM('m-quick'); loadMemo();
 }
 // إنهاء الجلسة: تنبيه بمن لم يُسجَّل له أي شيء
