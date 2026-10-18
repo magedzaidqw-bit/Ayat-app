@@ -77,7 +77,7 @@ body {
   to   { box-shadow: 0 0 0 6px rgba(168,150,85,0.12), 0 0 0 12px rgba(168,150,85,0.06), 0 0 65px rgba(168,150,85,0.40), inset 0 0 20px rgba(0,0,0,0.2); }
 }
 #splash h1 { font-family:'Amiri',serif; font-size:32px; color:var(--gold3); text-align:center; line-height:1.8; letter-spacing:0.5px; position:relative; text-shadow:0 2px 20px rgba(168,150,85,0.3); }
-#splash p { color:rgba(247,243,234,0.55); font-size:13px; margin-top:8px; letter-spacing:1px; position:relative; }
+#splash p { color:rgba(247,243,234,0.92); font-size:19px; font-weight:600; margin-top:10px; letter-spacing:0.5px; position:relative; }
 .enter-btn {
   margin-top:44px; padding:16px 60px; border:none; border-radius:50px;
   background:linear-gradient(135deg,var(--gold3),var(--gold2),var(--gold));
@@ -590,7 +590,7 @@ tbody tr:hover { background:#fbfaf6; }
   <div class="logo-ring">
     <img src="ayat-logo.png" alt="جمعية آيات الخيرية" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none'; this.parentElement.textContent='📖'">
   </div>
-  <h1>جمعية آيات الخيرية<br>لتحفيظ القرآن الكريم</h1>
+  <h1>جمعية آيات الخيرية</h1>
   <p>إدارة حلقات تحفيظ القرآن الكريم</p>
   <button class="enter-btn" id="enter-btn">دخول النظام</button>
 </div>
@@ -1202,7 +1202,7 @@ function buildNav() {
   let tabs = [];
   if (CP.role === 'admin') {
     tabs = [
-      {id:'dashboard',l:'📊 الرئيسية'},{id:'parent-messages',l:'✉️ رسائل أولياء الأمور'},{id:'circles',l:'🕌 الحلقات'},
+      {id:'dashboard',l:'📊 الرئيسية'},{id:'parent-messages',l:'✉️ رسائل أولياء الأمور'},{id:'circles',l:'🕌 المراكز والحلقات'},
       {id:'sup-home',l:'🔔 متابعة الحلقات والنشاط'},
       {id:'teachers',l:'👨‍🏫 المحفظون'},{id:'supervisors',l:'🧑‍💼 المشرفون'},
       {id:'students',l:'🎓 الطلاب'},{id:'attendance',l:'📅 الحضور'},
@@ -1272,6 +1272,7 @@ function buildPages() {
     <div class="sgrid">
       <div class="sc"><div class="si">👨‍🏫</div><div><div class="sn" id="st1">—</div><div class="sl">محفظ</div></div></div>
       <div class="sc" style="border-color:var(--gold)"><div class="si" style="background:#fdf1d9">🎓</div><div><div class="sn" id="st2">—</div><div class="sl">طالب</div></div></div>
+      <div class="sc" style="border-color:#2d6262"><div class="si" style="background:#e6f0ee">🏛️</div><div><div class="sn" id="st5">—</div><div class="sl">مركز</div></div></div>
       <div class="sc" style="border-color:#14568f"><div class="si" style="background:#e0eefb">🕌</div><div><div class="sn" id="st3">—</div><div class="sl">حلقة</div></div></div>
       <div class="sc" style="border-color:#a3262b"><div class="si" style="background:#fbe4e4">📅</div><div><div class="sn" id="st4">—</div><div class="sl">حضور اليوم</div></div></div>
     </div>
@@ -1291,9 +1292,10 @@ function buildPages() {
   </div>
 
   <div class="page" id="p-circles">
-    <div class="stitle">🕌 إدارة الحلقات</div>
-    <div style="margin-bottom:14px"><button class="btn btn-g" onclick="resetCircleForm()">+ إضافة حلقة</button></div>
-    <div class="card"><div class="ch"><h3>قائمة الحلقات</h3><button class="btn btn-o btn-sm" onclick="printTable('قائمة الحلقات','circles-body-table')">🖨️ طباعة</button></div><div class="cb"><div class="tw"><table id="circles-body-table"><thead><tr><th>#</th><th>الحلقة</th><th>المحفظ</th><th>الموعد (من الأحد إلى الأربعاء)</th><th>الموقع</th><th>الطلاب</th><th>إجراءات</th></tr></thead><tbody id="circles-body"></tbody></table></div></div></div>
+    <div class="stitle">🕌 إدارة المراكز والحلقات</div>
+    <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g" onclick="resetCenterForm()">+ إضافة مركز</button><button class="btn btn-g" onclick="resetCircleForm()">+ إضافة حلقة</button></div>
+    <div class="card" style="margin-bottom:14px"><div class="ch"><h3>المراكز</h3></div><div class="cb"><div class="tw"><table><thead><tr><th>#</th><th>المركز</th><th>الموقع</th><th>الحلقات</th><th>إجراءات</th></tr></thead><tbody id="centers-body"></tbody></table></div></div></div>
+    <div class="card"><div class="ch"><h3>قائمة الحلقات</h3><button class="btn btn-o btn-sm" onclick="printTable('قائمة الحلقات','circles-body-table')">🖨️ طباعة</button></div><div class="cb"><div class="tw"><table id="circles-body-table"><thead><tr><th>#</th><th>المركز</th><th>الحلقة</th><th>المحفظ</th><th>الموعد (من السبت إلى الخميس)</th><th>الموقع</th><th>الطلاب</th><th>إجراءات</th></tr></thead><tbody id="circles-body"></tbody></table></div></div></div>
   </div>
 
   <div class="page" id="p-teachers">
@@ -1331,7 +1333,7 @@ function buildPages() {
     <div class="card"><div class="cb">
       <div class="fgrid" style="margin-bottom:16px">
         <div class="fg"><label>الحلقة</label><select id="att-circle" onchange="loadAttStudents()"><option value="">اختر الحلقة</option></select></div>
-        <div class="fg"><label>التاريخ</label><input type="date" id="att-date"></div>
+        <div class="fg"><label>التاريخ</label><input type="date" id="att-date" onchange="loadAttStudents()"></div>
       </div>
       <div id="att-list"><div class="empty"><div class="ei">👆</div><p>اختر الحلقة أولاً</p></div></div>
       <div id="att-save" style="display:none;margin-top:16px"><button class="btn btn-g" onclick="saveAtt()">💾 حفظ الحضور</button></div>
@@ -1515,16 +1517,24 @@ function buildModals() {
   const wrap = document.createElement('div');
   wrap.innerHTML = `
 
+  <div class="mo" id="m-center"><div class="modal"><div class="mh"><h3>إضافة مركز</h3><button class="mc" onclick="closeM('m-center')">✕</button></div>
+  <div class="mb">
+    <div class="fg"><label>اسم المركز</label><input type="text" id="ce-name" placeholder="مثل: عبد الرحمن بن عوف"></div>
+    <div class="fg"><label>الموقع</label><input type="text" id="ce-location" placeholder="مثال: الجهراء – ق2"></div>
+    <button class="btn-pri" onclick="saveCenter()">حفظ</button>
+  </div></div></div>
   <div class="mo" id="m-circle"><div class="modal"><div class="mh"><h3>إضافة حلقة</h3><button class="mc" onclick="closeM('m-circle')">✕</button></div>
   <div class="mb">
-    <div class="fg"><label>اسم الحلقة</label><input type="text" id="c-name" placeholder="مثل: حلقة الفجر"></div>
+    <div class="fg"><label>المركز</label><select id="c-center"><option value="">اختر المركز</option></select></div>
+    <div class="fg"><label>الحلقة</label><select id="c-name"><option value="الحلقة الأولى">الحلقة الأولى</option><option value="الحلقة الثانية">الحلقة الثانية</option><option value="الحلقة الثالثة">الحلقة الثالثة</option><option value="الحلقة الرابعة">الحلقة الرابعة</option><option value="الحلقة الخامسة">الحلقة الخامسة</option><option value="الحلقة السادسة">الحلقة السادسة</option></select></div>
     <div class="fg"><label>المحفظ</label><select id="c-teacher"><option value="">اختر محفظاً</option></select></div>
     <div class="fg"><label>محفظ مشارك (اختياري — يرى طلاب الحلقة ويسجّل لهم كالمحفظ)</label><select id="c-coteacher"><option value="">— لا يوجد —</option></select></div>
     <div class="fg"><label>الموعد</label>
       <div style="display:flex;align-items:center;gap:8px;background:var(--gray);border-radius:12px;padding:10px 14px;border:1.5px solid var(--gray2)">
-        <span style="color:var(--mid);font-size:13px;white-space:nowrap">من الأحد إلى الأربعاء —</span>
+        <span style="color:var(--mid);font-size:13px;white-space:nowrap">من السبت إلى الخميس —</span>
         <select id="c-schedule" style="border:none;background:transparent;font-family:'Cairo',sans-serif;font-size:13px;color:var(--ink);flex:1;outline:none">
           <option value="">اختر الوقت</option>
+          <option value="من بعد صلاة العصر إلى صلاة العشاء">من بعد صلاة العصر إلى صلاة العشاء</option>
           <option value="بعد العصر">بعد العصر</option>
           <option value="بعد المغرب">بعد المغرب</option>
           <option value="بعد العشاء">بعد العشاء</option>
@@ -2136,13 +2146,15 @@ function showGlobalError(msg) {
 // ===================== DASHBOARD =====================
 async function loadDash() {
   try {
-  const [t,s,c,a,mRes] = await Promise.all([
+  const [t,s,c,a,mRes,ce] = await Promise.all([
     sb.from('profiles').select('id',{count:'exact'}).eq('role','teacher'),
     sb.from('students').select('id',{count:'exact'}),
     sb.from('circles').select('id',{count:'exact'}),
     sb.from('attendance').select('id',{count:'exact'}).eq('date',today()).eq('status','present'),
-    sb.from('memorization_log').select('date,surah_from,surah_to,mastery,students(full_name)').order('created_at',{ascending:false}).limit(10)
+    sb.from('memorization_log').select('date,surah_from,surah_to,mastery,students(full_name)').order('created_at',{ascending:false}).limit(10),
+    sb.from('centers').select('id',{count:'exact'})
   ]);
+  document.getElementById('st5').textContent = ce.count||0;
   document.getElementById('st1').textContent = t.count||0;
   document.getElementById('st2').textContent = s.count||0;
   document.getElementById('st3').textContent = c.count||0;
@@ -2155,41 +2167,73 @@ async function loadDash() {
 function emptyRow(cols,msg){ return `<tr><td colspan="${cols}"><div class="empty"><div class="ei">📭</div><p>${msg}</p></div></td></tr>`; }
 
 // ===================== CIRCLES =====================
+let CENTERS = [];
+async function fetchCenters(){ const {data}=await sb.from('centers').select('*').order('name'); CENTERS=data||[]; return CENTERS; }
+function circleFullName(c){ const ce=CENTERS.find(x=>x.id===c.center_id); return ce ? ('مركز '+ce.name+' – '+(c.label||c.name)) : c.name; }
 async function loadCircles() {
   showLoading('circles-body');
-  const { data } = await sb.from('circles').select('*').order('name');
+  await fetchCenters();
+  const { data } = await sb.from('circles').select('*');
   const { data: st } = await sb.from('students').select('circle_id');
   const cnt = {}; st?.forEach(s=>cnt[s.circle_id]=(cnt[s.circle_id]||0)+1);
   const coNames = {};
   const coIds = [...new Set((data||[]).map(c => c.co_teacher_id).filter(Boolean))];
   if (coIds.length) { const { data: cp } = await sb.from('profiles').select('id,full_name').in('id', coIds); (cp||[]).forEach(x => coNames[x.id] = x.full_name); }
+  const cname = c => (CENTERS.find(x=>x.id===c.center_id)?.name)||'';
+  const rows = (data||[]).slice().sort((a,b)=> cname(a).localeCompare(cname(b),'ar') || (a.label||a.name).localeCompare(b.label||b.name,'ar'));
+  const nC = {}; rows.forEach(c=>{ if(c.center_id) nC[c.center_id]=(nC[c.center_id]||0)+1; });
+  document.getElementById('centers-body').innerHTML = CENTERS.length ? CENTERS.map((ce,i)=>`<tr>
+    <td style="color:var(--mid);font-weight:700">${i+1}</td><td><strong>${h(ce.name)}</strong></td><td>${h(ce.location||'—')}</td>
+    <td><span class="badge be">${nC[ce.id]||0} حلقة</span></td>
+    <td><button class="btn btn-o btn-sm" onclick="editCenter('${ce.id}')">✏️</button> <button class="btn btn-r btn-sm" onclick="delCenter('${ce.id}')">حذف</button></td></tr>`).join('') : emptyRow(5,'لا توجد مراكز — أضف مركزاً أولاً');
   const b = document.getElementById('circles-body');
-  b.innerHTML = data?.length ? data.map((c,i)=>`<tr>
+  b.innerHTML = rows.length ? rows.map((c,i)=>`<tr>
     <td style="color:var(--mid);font-weight:700">${i+1}</td>
-    <td><strong>${h(c.name)}</strong></td>
-    <td>${c.teacher_name || '—'}${c.co_teacher_id && coNames[c.co_teacher_id] ? '<br><small style="color:#14568f">+ مشارك: ' + h(coNames[c.co_teacher_id]) + '</small>' : ''}</td>
-    <td>${c.schedule||'—'}</td>
-    <td>${c.location||'—'}</td>
+    <td>${h(cname(c)||'—')}</td>
+    <td><strong>${h(c.label||c.name)}</strong></td>
+    <td>${h(c.teacher_name || '—')}${c.co_teacher_id && coNames[c.co_teacher_id] ? '<br><small style="color:#14568f">+ مشارك: ' + h(coNames[c.co_teacher_id]) + '</small>' : ''}</td>
+    <td>${h(c.schedule||'—')}</td>
+    <td>${h(c.location||'—')}</td>
     <td><span class="badge be">${cnt[c.id]||0} طالب</span></td>
     <td>
-      <button class="btn btn-o btn-sm" onclick="editCircle('${c.id}','${esc(c.name)}','${c.teacher_id||''}','${esc(c.schedule||'')}','${esc(c.location||'')}','${c.co_teacher_id||''}')">✏️</button>
+      <button class="btn btn-o btn-sm" onclick="editCircle('${c.id}','${esc(c.label||c.name)}','${c.teacher_id||''}','${esc(c.schedule||'')}','${esc(c.location||'')}','${c.co_teacher_id||''}','${c.center_id||''}')">✏️</button>
       <button class="btn btn-r btn-sm" onclick="delCircle('${c.id}')">حذف</button>
-    </td></tr>`).join('') : emptyRow(7,'لا توجد حلقات — تأكد من الاتصال بقاعدة البيانات');
+    </td></tr>`).join('') : emptyRow(8,'لا توجد حلقات');
 }
+let editingCenterId = null;
+function resetCenterForm(){ editingCenterId=null; document.querySelector('#m-center .mh h3').textContent='إضافة مركز'; document.getElementById('ce-name').value=''; document.getElementById('ce-location').value=''; openM('m-center'); }
+function editCenter(id){ const ce=CENTERS.find(x=>x.id===id); if(!ce)return; editingCenterId=id; document.querySelector('#m-center .mh h3').textContent='تعديل مركز'; document.getElementById('ce-name').value=ce.name; document.getElementById('ce-location').value=ce.location||''; openM('m-center'); }
+async function saveCenter(){
+  const name=v('ce-name').trim(), location=v('ce-location').trim();
+  if(!name){alert('أدخل اسم المركز');return;}
+  if(editingCenterId){
+    await sb.from('centers').update({name,location}).eq('id',editingCenterId);
+    const {data:cs}=await sb.from('circles').select('id,label,name').eq('center_id',editingCenterId);
+    for(const c of cs||[]){ await sb.from('circles').update({name:'مركز '+name+' – '+(c.label||c.name)}).eq('id',c.id); }
+  } else { await sb.from('centers').insert({name,location}); }
+  editingCenterId=null; closeM('m-center'); loadCircles();
+}
+async function delCenter(id){
+  const {count}=await sb.from('circles').select('id',{count:'exact',head:true}).eq('center_id',id);
+  if(count){alert('لا يمكن حذف مركز فيه حلقات. احذف حلقاته أو انقلها أولاً.');return;}
+  if(!confirm('حذف هذا المركز؟'))return; await sb.from('centers').delete().eq('id',id); loadCircles();
+}
+async function fillCenterSelect(sel){ await fetchCenters(); const s=document.getElementById('c-center'); s.innerHTML='<option value="">اختر المركز</option>'+CENTERS.map(c=>`<option value="${c.id}">${h(c.name)}</option>`).join(''); if(sel) s.value=sel; }
 let editingCircleId = null;
-function resetCircleForm() {
+async function resetCircleForm() {
   editingCircleId = null;
   document.querySelector('#m-circle .mh h3').textContent = 'إضافة حلقة';
   document.querySelector('#m-circle .btn-pri').textContent = 'حفظ';
-  document.getElementById('c-name').value = '';
+  document.getElementById('c-name').selectedIndex = 0;
   document.getElementById('c-schedule').value = '';
   document.getElementById('c-location').value = '';
+  await fillCenterSelect('');
   openM('m-circle');
 }
-function editCircle(id,name,teacherId,schedule,location,coTeacherId) {
+async function editCircle(id,name,teacherId,schedule,location,coTeacherId,centerId) {
   editingCircleId = id;
+  await fillCenterSelect(centerId);
   document.getElementById('c-name').value = name;
-  // استخراج الوقت فقط (للتوافق مع البيانات القديمة)
   const timeOnly = schedule.includes('—') ? schedule.split('—')[1].trim() : schedule;
   document.getElementById('c-schedule').value = timeOnly;
   document.getElementById('c-location').value = location;
@@ -2199,18 +2243,14 @@ function editCircle(id,name,teacherId,schedule,location,coTeacherId) {
   document.querySelector('#m-circle .btn-pri').textContent = 'حفظ التعديل';
 }
 async function saveCircle() {
-  const name=v('c-name'),teacher=v('c-teacher'),scheduleTime=v('c-schedule'),location=v('c-location');
-  if(!name){alert('أدخل اسم الحلقة');return;}
+  const label=v('c-name'),teacher=v('c-teacher'),scheduleTime=v('c-schedule'),location=v('c-location'),centerId=v('c-center');
+  if(!centerId){alert('اختر المركز');return;}
   if(!scheduleTime){alert('اختر وقت الحلقة');return;}
-  const schedule = scheduleTime; // نحفظ الوقت فقط
-  if (editingCircleId) {
-    await sb.from('circles').update({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location}).eq('id', editingCircleId);
-    editingCircleId = null;
-    document.querySelector('#m-circle .mh h3').textContent = 'إضافة حلقة';
-    document.querySelector('#m-circle .btn-pri').textContent = 'حفظ';
-  } else {
-    await sb.from('circles').insert({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location});
-  }
+  const ce = CENTERS.find(x=>x.id===centerId);
+  const name = 'مركز '+ce.name+' – '+label;
+  const row = {name,label,center_id:centerId,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule:scheduleTime,location};
+  if (editingCircleId) { await sb.from('circles').update(row).eq('id', editingCircleId); editingCircleId = null; }
+  else { await sb.from('circles').insert(row); }
   closeM('m-circle'); loadCircles();
 }
 async function delCircle(id){ if(!confirm('حذف هذه الحلقة؟'))return; await sb.from('circles').delete().eq('id',id); loadCircles(); }
@@ -2338,16 +2378,21 @@ async function saveSupervisor() {
 async function delSupervisor(id) { if(!confirm('حذف هذا المشرف؟'))return; await sb.from('profiles').delete().eq('id',id); loadSupervisors(); }
 
 async function editSupCircles(supId, supName) {
-  const { data: allCircles } = await sb.from('circles').select('id,name').order('name');
+  await fetchCenters();
+  const { data: allCircles } = await sb.from('circles').select('id,name,label,center_id').order('name');
   const { data: myLinks } = await sb.from('supervisor_circles').select('circle_id').eq('supervisor_id', supId);
   const myCircleIds = myLinks?.map(l => l.circle_id) || [];
   const container = document.getElementById('sup-circles-checks');
-  container.innerHTML = allCircles?.map(c => `
-    <label style="display:flex;align-items:center;gap:8px;padding:6px;cursor:pointer;border-radius:6px;margin-bottom:4px;background:${myCircleIds.includes(c.id)?'#e8f5e9':'#f9f9f9'}">
-      <input type="checkbox" value="${c.id}" ${myCircleIds.includes(c.id)?'checked':''} onchange="this.closest('label').style.background=this.checked?'#e8f5e9':'#f9f9f9'">
-      <span>${h(c.name)}</span>
-    </label>`).join('') || '';
-  document.getElementById('sup-circles-title').textContent = 'حلقات: ' + supName;
+  const row = c => `<label style="display:flex;align-items:center;gap:8px;padding:6px 6px 6px 6px;margin-right:18px;cursor:pointer;border-radius:6px;margin-bottom:4px;background:${myCircleIds.includes(c.id)?'#e8f5e9':'#f9f9f9'}"><input type="checkbox" class="sc-c" data-center="${c.center_id||''}" value="${c.id}" ${myCircleIds.includes(c.id)?'checked':''} onchange="this.closest('label').style.background=this.checked?'#e8f5e9':'#f9f9f9'"><span>${h(c.label||c.name)}</span></label>`;
+  let html='';
+  for (const ce of CENTERS) {
+    const cs=(allCircles||[]).filter(c=>c.center_id===ce.id); if(!cs.length) continue;
+    html += `<div style="margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;padding:6px;cursor:pointer;font-weight:800;color:var(--gd)"><input type="checkbox" onchange="document.querySelectorAll('.sc-c[data-center=\\''+'${ce.id}'+'\\']').forEach(x=>{x.checked=this.checked;x.dispatchEvent(new Event('change'))})"><span>🕌 مركز ${h(ce.name)} (كل الحلقات)</span></label>${cs.map(row).join('')}</div>`;
+  }
+  const loose=(allCircles||[]).filter(c=>!c.center_id);
+  if(loose.length) html += `<div>${loose.map(row).join('')}</div>`;
+  container.innerHTML = html;
+  document.getElementById('sup-circles-title').textContent = 'مراكز وحلقات: ' + supName;
   const saveBtn = document.getElementById('sup-circles-save-btn');
   saveBtn.onclick = () => saveSupCircles(supId);
   openM('m-sup-circles');
@@ -2988,6 +3033,17 @@ async function loadAttStudents() {
   // إحصائيات مباشرة
   updateAttStats(data.length);
   sv.style.display = 'block';
+  // تحميل ما سُجّل سابقاً لهذا اليوم (حتى لا يمحو محفظٌ ثانٍ في الحلقة حضورَ زميله)
+  try {
+    const dt = v('att-date');
+    if (dt) {
+      const { data: ex } = await sb.from('attendance').select('student_id,status').eq('circle_id', cid).eq('date', dt);
+      const rev = { present:'p', absent:'a', excused:'e' };
+      let n = 0;
+      (ex||[]).forEach(r => { if (rev[r.status] && attData[r.student_id] !== undefined) { setAttQuick(r.student_id, rev[r.status]); n++; } });
+      if (n) list.insertAdjacentHTML('afterbegin', `<div style="background:#e8f1fb;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#14568f;border-right:3px solid #14568f">ℹ️ تم تحميل الحضور المسجّل سابقاً لهذا اليوم (${n} طالب). عدّل ما تريد ثم احفظ.</div>`);
+    }
+  } catch(e) {}
 }
 
 function setAttQuick(sid, st) {
@@ -3144,6 +3200,7 @@ async function printMemoHistory() {
 
 
 function buildPrintHtml(bodyHtml) {
+  bodyHtml = String(bodyHtml).replace(/src="ayat-logo\.png"/g, 'src="' + printLogoUrl() + '"');
   const css =
       '*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     + 'body{font-family:"Cairo",Arial,sans-serif;direction:rtl;margin:0;padding:0;color:#111;font-size:13px;background:white;line-height:1.7}'
@@ -3260,10 +3317,23 @@ async function saveAtt() {
   if (!cid||!date) { alert('اختر الحلقة والتاريخ'); return; }
   try {
     const recs = Object.entries(attData).map(([student_id,status])=>({student_id,circle_id:cid,date,status,created_by:CU.id}));
-    const { error: delErr } = await sb.from('attendance').delete().eq('circle_id',cid).eq('date',date);
-    if (delErr) throw delErr;
-    const { error: insErr } = await sb.from('attendance').insert(recs);
-    if (insErr) throw insErr;
+    // تحديث الموجود وإضافة الناقص فقط (بدل المسح وإعادة الكتابة) لحماية تسجيل المحفظ الآخر في الحلقة المشتركة
+    const { data: ex, error: exErr } = await sb.from('attendance').select('id,student_id,status').eq('circle_id',cid).eq('date',date);
+    if (exErr) throw exErr;
+    const byStudent = {};
+    (ex||[]).forEach(r => { (byStudent[r.student_id] = byStudent[r.student_id] || []).push(r); });
+    const toInsert = [];
+    for (const r of recs) {
+      const cur = byStudent[r.student_id];
+      if (!cur || !cur.length) { toInsert.push(r); continue; }
+      if (cur[0].status !== r.status) {
+        const { error: upErr } = await sb.from('attendance').update({ status: r.status, created_by: CU.id }).eq('id', cur[0].id);
+        if (upErr) throw upErr;
+      }
+      // حذف أي تكرار قديم لنفس الطالب في نفس اليوم
+      for (const dup of cur.slice(1)) await sb.from('attendance').delete().eq('id', dup.id);
+    }
+    if (toInsert.length) { const { error: insErr } = await sb.from('attendance').insert(toInsert); if (insErr) throw insErr; }
     alert('✅ تم حفظ الحضور');
     loadAttHist();
   } catch(e) { showGlobalError('تعذر حفظ الحضور: ' + (e.message||'خطأ غير معروف')); }
@@ -3271,8 +3341,8 @@ async function saveAtt() {
 async function loadAttHist() {
   let q = sb.from('attendance').select('*,students(full_name),circles(name)').order('date',{ascending:false}).limit(50);
   if (CP.role === 'teacher') {
-    const { data: myCircle } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).single();
-    if (myCircle) q = q.eq('circle_id', myCircle.id);
+    const { data: myCircles } = await sb.from('circles').select('id').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
+    if (myCircles?.length) q = q.in('circle_id', myCircles.map(c => c.id));
   }
   const { data } = await q;
   const b = document.getElementById('att-hist');
