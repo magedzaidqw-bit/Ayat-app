@@ -397,3 +397,4 @@ create policy staff_read_centers on public.centers for select to authenticated
 alter table public.circles add column if not exists center_id uuid references public.centers(id) on delete set null;
 alter table public.circles add column if not exists label text;
 create index if not exists circles_center_id_idx on public.circles(center_id);
+grant select, insert, update, delete on public.centers to authenticated;
