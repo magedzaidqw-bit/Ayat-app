@@ -380,3 +380,20 @@ create policy "Auth upload student-photos" on storage.objects for insert with ch
 create policy "Staff read civil-ids" on storage.objects for select using (bucket_id = 'civil-ids' and is_staff());
 create policy "Staff delete civil-ids" on storage.objects for delete to authenticated using (bucket_id = 'civil-ids' and is_staff());
 create policy "Staff read student-photos" on storage.objects for select using (bucket_id = 'student-photos' and is_staff());
+
+-- ========== طبقة المراكز (مركز ← حلقات) ==========
+create table if not exists public.centers (
+  id uuid primary key default extensions.uuid_generate_v4(),
+  name text not null,
+  location text,
+  created_at timestamptz default now()
+);
+alter table public.centers enable row level security;
+create policy admin_all_centers on public.centers for all
+  using (exists (select 1 from public.profiles where profiles.id = auth.uid() and profiles.role = 'admin'))
+  with check (exists (select 1 from public.profiles where profiles.id = auth.uid() and profiles.role = 'admin'));
+create policy staff_read_centers on public.centers for select to authenticated
+  using (exists (select 1 from public.profiles where profiles.id = auth.uid() and profiles.role = any (array['admin','teacher','supervisor'])));
+alter table public.circles add column if not exists center_id uuid references public.centers(id) on delete set null;
+alter table public.circles add column if not exists label text;
+create index if not exists circles_center_id_idx on public.circles(center_id);
