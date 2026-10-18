@@ -3200,6 +3200,7 @@ async function printMemoHistory() {
 
 
 function buildPrintHtml(bodyHtml) {
+  bodyHtml = String(bodyHtml).replace(/src="ayat-logo\.png"/g, 'src="' + printLogoUrl() + '"');
   const css =
       '*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     + 'body{font-family:"Cairo",Arial,sans-serif;direction:rtl;margin:0;padding:0;color:#111;font-size:13px;background:white;line-height:1.7}'
