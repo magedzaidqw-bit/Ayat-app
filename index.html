@@ -1272,6 +1272,7 @@ function buildPages() {
     <div class="sgrid">
       <div class="sc"><div class="si">👨‍🏫</div><div><div class="sn" id="st1">—</div><div class="sl">محفظ</div></div></div>
       <div class="sc" style="border-color:var(--gold)"><div class="si" style="background:#fdf1d9">🎓</div><div><div class="sn" id="st2">—</div><div class="sl">طالب</div></div></div>
+      <div class="sc" style="border-color:#2d6262"><div class="si" style="background:#e6f0ee">🏛️</div><div><div class="sn" id="st5">—</div><div class="sl">مركز</div></div></div>
       <div class="sc" style="border-color:#14568f"><div class="si" style="background:#e0eefb">🕌</div><div><div class="sn" id="st3">—</div><div class="sl">حلقة</div></div></div>
       <div class="sc" style="border-color:#a3262b"><div class="si" style="background:#fbe4e4">📅</div><div><div class="sn" id="st4">—</div><div class="sl">حضور اليوم</div></div></div>
     </div>
@@ -2145,13 +2146,15 @@ function showGlobalError(msg) {
 // ===================== DASHBOARD =====================
 async function loadDash() {
   try {
-  const [t,s,c,a,mRes] = await Promise.all([
+  const [t,s,c,a,mRes,ce] = await Promise.all([
     sb.from('profiles').select('id',{count:'exact'}).eq('role','teacher'),
     sb.from('students').select('id',{count:'exact'}),
     sb.from('circles').select('id',{count:'exact'}),
     sb.from('attendance').select('id',{count:'exact'}).eq('date',today()).eq('status','present'),
-    sb.from('memorization_log').select('date,surah_from,surah_to,mastery,students(full_name)').order('created_at',{ascending:false}).limit(10)
+    sb.from('memorization_log').select('date,surah_from,surah_to,mastery,students(full_name)').order('created_at',{ascending:false}).limit(10),
+    sb.from('centers').select('id',{count:'exact'})
   ]);
+  document.getElementById('st5').textContent = ce.count||0;
   document.getElementById('st1').textContent = t.count||0;
   document.getElementById('st2').textContent = s.count||0;
   document.getElementById('st3').textContent = c.count||0;
