@@ -4226,6 +4226,28 @@ async function loadActivity() {
     const periodLabel = period === '1' ? 'اليوم' : period === 'month' ? 'هذا الشهر' : `آخر ${period} أيام`;
     const monthName = EV_MONTHS_AR[now.getMonth()];
 
+    // ===== سجل التقرير الأسبوعي للشهر الحالي: من أرسل ومن لم يرسل في كل أسبوع (يبدأ من جديد مع كل شهر) =====
+    const wkWeeks = [];
+    { const fd = new Date(now.getFullYear(), now.getMonth(), 1);
+      while (fd.getDay() !== 0) fd.setDate(fd.getDate() + 1);
+      const todayLocal = ymdLocal(now);
+      for (const d = new Date(fd); d.getMonth() === now.getMonth(); d.setDate(d.getDate() + 7)) {
+        if (ymdLocal(d) <= todayLocal) wkWeeks.push({ key: ymdLocal(d), label: d.getDate() + ' ' + EV_MONTHS_AR[d.getMonth()] });
+      }
+    }
+    let wkMonthRows = [];
+    if (wkWeeks.length) {
+      try { wkMonthRows = await fetchAllRows(() => sb.from('weekly_report_sends').select('teacher_id,circle_id,sent_count,week_start').gte('week_start', ymdLocal(new Date(new Date(wkWeeks[0].key + 'T00:00:00').getTime() - 86400000)))); } catch(e) { wkMonthRows = []; }
+    }
+    const wkSent = {}; // [teacher][weekKey] = عدد الطلاب
+    wkMonthRows.forEach(r => {
+      const dt = new Date(r.week_start + 'T00:00:00');
+      if (dt.getDay() === 6) dt.setDate(dt.getDate() + 1); // سجلات منتصف الليل التي حُفظت بتاريخ السبت (فرق التوقيت)
+      const k = ymdLocal(dt), t = r.teacher_id || circleTeacher[r.circle_id];
+      if (!t) return;
+      (wkSent[t] = wkSent[t] || {})[k] = ((wkSent[t] || {})[k] || 0) + (r.sent_count || 0);
+    });
+
     let html = periodNoticeHtml() + `<div class="cp-head"><div>
         <div class="cp-title">${isSup ? '🔔 متابعة حلقاتي والنشاط' : '🔔 متابعة الحلقات ونشاط المحفظين والمشرفين'}</div>
         <div class="cp-sub">الفترة: ${periodLabel} — ${arDateNow()}</div></div>
@@ -4276,6 +4298,38 @@ async function loadActivity() {
         <td>${badge(r.level)}</td></tr>`;
     });
     html += `</tbody></table></div></div></div>`;
+
+    // جدول: من أرسل التقرير الأسبوعي في كل أسبوع من الشهر الحالي
+    {
+      const todayLocalK = ymdLocal(now);
+      const curWeekKey = ymdLocal(wkStart);
+      html += `<div class="card"><div class="ch"><h3>📅 سجل التقرير الأسبوعي — ${monthName}</h3></div><div class="cb">`;
+      if (!wkWeeks.length) {
+        html += `<div style="color:var(--mid);padding:8px">لم يبدأ أول أسبوع من ${monthName} بعد (تبدأ الأسابيع يوم الأحد).</div>`;
+      } else {
+        html += `<div class="tw"><table><thead><tr><th>المحفظ</th>${wkWeeks.map((w, i) => `<th style="text-align:center">الأسبوع ${i + 1}<div style="font-size:10px;font-weight:400">من ${w.label}</div></th>`).join('')}</tr></thead><tbody>`;
+        const sentCount = wkWeeks.map(() => 0);
+        rows.forEach(r => {
+          html += `<tr><td><strong>${escapeHtml(r.t.full_name)}</strong></td>`;
+          wkWeeks.forEach((w, i) => {
+            const n = ((wkSent[r.t.id] || {})[w.key]) || 0, N = r.students || 0;
+            if (n > 0) sentCount[i]++;
+            if (n > 0) {
+              const part = N && n < N * 0.5;
+              html += `<td style="text-align:center;color:${part ? '#c9962e' : '#1d6b3a'};font-weight:700">${part ? '⚠️' : '✔'} ${n}${N ? ' من ' + N : ''}</td>`;
+            } else if (w.key === curWeekKey) {
+              html += `<td style="text-align:center;color:#c9962e;font-weight:700">⏳ لم يُرسل بعد</td>`;
+            } else {
+              html += `<td style="text-align:center;color:#a3262b;font-weight:700">✘ لم يُرسل</td>`;
+            }
+          });
+          html += `</tr>`;
+        });
+        html += `<tr style="background:#f6f2e6;font-weight:800"><td>أرسل من ${rows.length} محفظ</td>${sentCount.map(c => `<td style="text-align:center">${c} من ${rows.length}</td>`).join('')}</tr>`;
+        html += `</tbody></table></div><div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">الرقم = عدد الطلاب الذين فُتح لهم التقرير للإرسال. ⚠️ = أقل من نصف طلاب الحلقة. تبدأ الأسابيع يوم الأحد، ويبدأ السجل من جديد مع كل شهر.</div>`;
+      }
+      html += `</div></div>`;
+    }
 
     html += `<div class="card"><div class="ch"><h3>${isSup ? '⭐ تقييمك للمحفظين — ' + monthName : '🧑‍💼 المشرفون — تقييم ' + monthName + ' للمحفظين'}</h3></div><div class="cb"><div class="tw"><table>
       <thead><tr><th>المشرف</th><th>الحلقات</th><th>المحفظون تحت إشرافه</th><th>تم تقييمهم</th><th>لم يُقيَّموا</th><th>آخر تقييم</th><th>الحالة</th></tr></thead><tbody>`;
