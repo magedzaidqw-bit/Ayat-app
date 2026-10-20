@@ -398,3 +398,12 @@ alter table public.circles add column if not exists center_id uuid references pu
 alter table public.circles add column if not exists label text;
 create index if not exists circles_center_id_idx on public.circles(center_id);
 grant select, insert, update, delete on public.centers to authenticated;
+
+-- السماح للمحفظ/المشرف/المدير بإنشاء وقراءة ملفات أولياء الأمور فقط
+create or replace function public.is_staff_or_teacher() returns boolean
+language sql stable security definer set search_path to 'public'
+as $$ select coalesce((select role in ('admin','supervisor','teacher') from public.profiles where id = auth.uid()), false) $$;
+create policy profiles_staff_insert_parent on public.profiles for insert to authenticated
+  with check (role = 'parent' and public.is_staff_or_teacher());
+create policy profiles_staff_read_parents on public.profiles for select to authenticated
+  using (role = 'parent' and public.is_staff_or_teacher());

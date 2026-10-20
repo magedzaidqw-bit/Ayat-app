@@ -706,6 +706,9 @@ tbody tr:hover { background:#fbfaf6; }
 const SB_URL = 'https://oacichohyhrnilwtwunc.supabase.co';
 const SB_KEY = 'sb_publishable_5tBeX-CfzWJ317h347ykhg_f4zghWnp';
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
+// تسجيل حساب جديد دون تبديل جلسة المستخدم الحالي (signUp على العميل الرئيسي يُسجّل الدخول بالحساب الجديد فتفشل بقية العمليات)
+const sbAuthTmp = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'ayat-tmp-signup' } });
+function signUpIsolated(creds) { return sbAuthTmp.auth.signUp(creds); }
 const CIVIL_DOMAIN = 'test.com';
 const PHONE_DOMAIN = 'parent.test.com';
 const PARENT_DOMAIN = 'parent.ayat.local';
@@ -2329,7 +2332,7 @@ async function saveTeacher() {
   const name=v('t-name'), civilId=v('t-civilid'), pass=v('t-pass'), phone=v('t-phone');
   if(!name||!civilId||!pass){ alert('أكمل البيانات المطلوبة (الاسم، الرقم المدني، كلمة المرور)'); return; }
   const email = civilId + '@' + CIVIL_DOMAIN;
-  const { data: authData, error } = await sb.auth.signUp({ email, password: pass });
+  const { data: authData, error } = await signUpIsolated({ email, password: pass });
   if (error) { alert('خطأ: ' + error.message); return; }
   const photoUrl = await uploadPhoto('t-civilphoto','civil-ids');
   if (authData.user) {
@@ -2366,7 +2369,7 @@ async function saveSupervisor() {
   const circleIds = Array.from(document.getElementById('sv-circles').selectedOptions).map(o=>o.value);
   if(!name||!civilId||!pass){ alert('أكمل البيانات المطلوبة'); return; }
   const email = civilId + '@' + CIVIL_DOMAIN;
-  const { data: authData, error } = await sb.auth.signUp({ email, password: pass });
+  const { data: authData, error } = await signUpIsolated({ email, password: pass });
   if (error) { alert('خطأ: ' + error.message); return; }
   if (authData.user) {
     await sb.from('profiles').insert({ id: authData.user.id, full_name: name, role:'supervisor', civil_id: civilId, phone });
@@ -2845,7 +2848,7 @@ async function saveStudent() {
       if (existing) {
         updates.parent_id = existing.id;
       } else {
-        const { data: authData, error } = await sb.auth.signUp({ email: parentEmail, password: parentPass });
+        const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPass });
         if (error) {
           alert('تنبيه: تعذر إنشاء حساب ولي الأمر (' + error.message + ').');
         } else if (authData.user) {
@@ -2860,7 +2863,7 @@ async function saveStudent() {
       if (existing) {
         updates.parent_id = existing.id;
       } else {
-        const { data: authData, error } = await sb.auth.signUp({ email: parentEmail, password: parentPhone });
+        const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPhone });
         if (!error && authData.user) {
           await sb.from('profiles').insert({ id: authData.user.id, full_name: parentName || ('ولي أمر ' + name), role:'parent', phone: parentPhone });
           updates.parent_id = authData.user.id;
@@ -2898,7 +2901,7 @@ async function saveStudent() {
     if (existing) {
       parentId = existing.id;
     } else {
-      const { data: authData, error } = await sb.auth.signUp({ email: parentEmail, password: parentPass });
+      const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPass });
       if (error) {
         alert('تنبيه: تعذر إنشاء حساب ولي الأمر (' + error.message + '). سيُحفظ الطالب بدون ربط.');
       } else if (authData.user) {
