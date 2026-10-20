@@ -2627,23 +2627,33 @@ async function onMemoStudentChange() {
 }
 
 // ===================== SEARCH =====================
+function normAr(t) {
+  return String(t || '').toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640\u200B-\u200F]/g, '')   // التشكيل والتطويل
+    .replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه')
+    .replace(/\s+/g, '');
+}
 function filterStudentsLocal() {
-  const q = document.getElementById('search-students')?.value?.trim().toLowerCase() || '';
-  const rows = document.querySelectorAll('#students-body tr');
+  const raw = document.getElementById('search-students')?.value?.trim() || '';
+  // كل كلمة تُقارن بعد توحيد الهمزات والتشكيل وإزالة المسافات (فيطابق «عبدالله» اسم «عبد الله»)
+  const tokens = raw.split(/\s+/).map(normAr).filter(Boolean);
+  const match = el => { const t = normAr(el.textContent); return tokens.every(k => t.includes(k)); };
   let count = 0;
-  rows.forEach(row => {
-    if (row.querySelector('td[colspan]')) return; // تجاهل صف "لا يوجد طلاب"
-    const text = row.textContent.toLowerCase();
-    if (!q || text.includes(q)) {
-      row.style.display = '';
-      count++;
-    } else {
-      row.style.display = 'none';
-    }
+  // الجوال: بطاقات الطلاب
+  document.querySelectorAll('#students-mobile-cards .mobile-card').forEach(card => {
+    const ok = !tokens.length || match(card);
+    card.style.display = ok ? '' : 'none';
+    if (ok) count++;
   });
-  // عرض عدد النتائج
+  // الكمبيوتر: صفوف الجدول
+  document.querySelectorAll('#students-body tr').forEach(row => {
+    if (row.querySelector('td[colspan]')) return; // تجاهل صف "لا يوجد طلاب"
+    const ok = !tokens.length || match(row);
+    row.style.display = ok ? '' : 'none';
+    if (ok) count++;
+  });
   const counter = document.getElementById('search-counter');
-  if (counter) counter.textContent = q ? `${count} نتيجة` : '';
+  if (counter) counter.textContent = tokens.length ? `${count} نتيجة` : '';
 }
 
 // ===================== STUDENTS =====================
