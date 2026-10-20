@@ -370,12 +370,12 @@ tbody tr:hover { background:#fbfaf6; }
 .qk-card{border:1.5px solid var(--gray2);border-radius:14px;padding:10px 12px;margin-bottom:10px;background:#fff}
 .qk-name{font-weight:800;color:var(--gd);margin-bottom:6px;font-size:14px}
 .qk-blk{border-right:4px solid;padding:4px 10px;margin-bottom:6px;background:#fafafa;border-radius:8px}
-.qk-lbl{font-size:12px;font-weight:800}.qk-lbl small{font-weight:400;color:var(--mid);margin-right:6px}
+.qk-lbl{font-size:12px;font-weight:800;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px}.qk-lbl small{font-weight:400;color:var(--mid);margin-right:6px}
 .qk-in{display:grid;grid-template-columns:minmax(110px,1.6fr) 70px 70px auto;gap:6px;align-items:center;margin-top:4px}
-.qk-in select,.qk-in input{padding:7px 6px;border:1.5px solid var(--gray2);border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;width:100%}
+.qk-in select,.qk-in input{padding:7px 6px;border:1.5px solid var(--gray2);border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;width:100%;min-width:0;color:#222;background:#fff}.qk-in input::placeholder{color:#888;opacity:1}.qk-in input{text-align:center}
 .qk-n{font-size:11px;font-weight:700;min-width:44px}
 .qk-ts{grid-column:1/-1;font-size:11px!important;color:var(--mid);padding:4px 6px!important}
-.qk-mq{float:left;width:auto!important;padding:2px 4px!important;font-size:11px!important}
+.qk-mq{margin-right:auto;width:auto!important;padding:2px 4px!important;font-size:11px!important}
 .qk-name{cursor:pointer}
 .qk-collapsed .qk-blk{display:none}.qk-collapsed{opacity:.75}
 .qk-badge{font-size:11px;font-weight:700;margin-right:6px;color:#b45309}
@@ -1295,7 +1295,7 @@ function buildPages() {
     <div class="stitle">🕌 إدارة المراكز والحلقات</div>
     <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g" onclick="resetCenterForm()">+ إضافة مركز</button><button class="btn btn-g" onclick="resetCircleForm()">+ إضافة حلقة</button></div>
     <div class="card" style="margin-bottom:14px"><div class="ch"><h3>المراكز</h3></div><div class="cb"><div class="tw"><table><thead><tr><th>#</th><th>المركز</th><th>الموقع</th><th>الحلقات</th><th>إجراءات</th></tr></thead><tbody id="centers-body"></tbody></table></div></div></div>
-    <div class="card"><div class="ch"><h3>قائمة الحلقات</h3><button class="btn btn-o btn-sm" onclick="printTable('قائمة الحلقات','circles-body-table')">🖨️ طباعة</button></div><div class="cb"><div class="tw"><table id="circles-body-table"><thead><tr><th>#</th><th>المركز</th><th>الحلقة</th><th>المحفظ</th><th>الموعد (من السبت إلى الخميس)</th><th>الموقع</th><th>الطلاب</th><th>إجراءات</th></tr></thead><tbody id="circles-body"></tbody></table></div></div></div>
+    <div class="card"><div class="ch"><h3>قائمة الحلقات</h3><button class="btn btn-o btn-sm" onclick="printTable('قائمة الحلقات','circles-body-table')">🖨️ طباعة</button></div><div class="cb"><div class="tw"><table id="circles-body-table"><thead><tr><th>#</th><th>المركز</th><th>الحلقة</th><th>المحفظ</th><th>الموعد (من الأحد إلى الأربعاء)</th><th>الموقع</th><th>الطلاب</th><th>إجراءات</th></tr></thead><tbody id="circles-body"></tbody></table></div></div></div>
   </div>
 
   <div class="page" id="p-teachers">
@@ -1531,10 +1531,9 @@ function buildModals() {
     <div class="fg"><label>محفظ مشارك (اختياري — يرى طلاب الحلقة ويسجّل لهم كالمحفظ)</label><select id="c-coteacher"><option value="">— لا يوجد —</option></select></div>
     <div class="fg"><label>الموعد</label>
       <div style="display:flex;align-items:center;gap:8px;background:var(--gray);border-radius:12px;padding:10px 14px;border:1.5px solid var(--gray2)">
-        <span style="color:var(--mid);font-size:13px;white-space:nowrap">من السبت إلى الخميس —</span>
+        <span style="color:var(--mid);font-size:13px;white-space:nowrap">من الأحد إلى الأربعاء —</span>
         <select id="c-schedule" style="border:none;background:transparent;font-family:'Cairo',sans-serif;font-size:13px;color:var(--ink);flex:1;outline:none">
           <option value="">اختر الوقت</option>
-          <option value="من بعد صلاة العصر إلى صلاة العشاء">من بعد صلاة العصر إلى صلاة العشاء</option>
           <option value="بعد العصر">بعد العصر</option>
           <option value="بعد المغرب">بعد المغرب</option>
           <option value="بعد العشاء">بعد العشاء</option>
