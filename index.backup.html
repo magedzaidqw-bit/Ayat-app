@@ -706,6 +706,9 @@ tbody tr:hover { background:#fbfaf6; }
 const SB_URL = 'https://oacichohyhrnilwtwunc.supabase.co';
 const SB_KEY = 'sb_publishable_5tBeX-CfzWJ317h347ykhg_f4zghWnp';
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
+// تسجيل حساب جديد دون تبديل جلسة المستخدم الحالي (signUp على العميل الرئيسي يُسجّل الدخول بالحساب الجديد فتفشل بقية العمليات)
+const sbAuthTmp = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'ayat-tmp-signup' } });
+function signUpIsolated(creds) { return sbAuthTmp.auth.signUp(creds); }
 const CIVIL_DOMAIN = 'test.com';
 const PHONE_DOMAIN = 'parent.test.com';
 const PARENT_DOMAIN = 'parent.ayat.local';
@@ -2312,6 +2315,10 @@ async function loadTeachers() {
             <button class="btn btn-o btn-sm" onclick="editProfile('${r.id}','${esc(r.full_name)}','${esc(r.phone||'')}','teacher')">✏️</button>
             <button class="btn btn-r btn-sm" onclick="delTeacher('${r.id}')">حذف</button>
           </div>
+        </div>`).join('') + circleNames.filter(n=>!profileIds.has(n)).map(name => `
+        <div class="mobile-card">
+          <div class="mobile-card-name">${name}</div>
+          <div class="mobile-card-row"><span>الحساب</span><span style="color:var(--mid)">لا يوجد حساب — أضف حساباً له</span></div>
         </div>`).join('') + '</div>';
     }
   } else {
@@ -2325,7 +2332,7 @@ async function saveTeacher() {
   const name=v('t-name'), civilId=v('t-civilid'), pass=v('t-pass'), phone=v('t-phone');
   if(!name||!civilId||!pass){ alert('أكمل البيانات المطلوبة (الاسم، الرقم المدني، كلمة المرور)'); return; }
   const email = civilId + '@' + CIVIL_DOMAIN;
-  const { data: authData, error } = await sb.auth.signUp({ email, password: pass });
+  const { data: authData, error } = await signUpIsolated({ email, password: pass });
   if (error) { alert('خطأ: ' + error.message); return; }
   const photoUrl = await uploadPhoto('t-civilphoto','civil-ids');
   if (authData.user) {
@@ -2362,7 +2369,7 @@ async function saveSupervisor() {
   const circleIds = Array.from(document.getElementById('sv-circles').selectedOptions).map(o=>o.value);
   if(!name||!civilId||!pass){ alert('أكمل البيانات المطلوبة'); return; }
   const email = civilId + '@' + CIVIL_DOMAIN;
-  const { data: authData, error } = await sb.auth.signUp({ email, password: pass });
+  const { data: authData, error } = await signUpIsolated({ email, password: pass });
   if (error) { alert('خطأ: ' + error.message); return; }
   if (authData.user) {
     await sb.from('profiles').insert({ id: authData.user.id, full_name: name, role:'supervisor', civil_id: civilId, phone });
@@ -2638,12 +2645,12 @@ function filterStudentsLocal() {
   // كل كلمة تُقارن بعد توحيد الهمزات والتشكيل وإزالة المسافات (فيطابق «عبدالله» اسم «عبد الله»)
   const tokens = raw.split(/\s+/).map(normAr).filter(Boolean);
   const match = el => { const t = normAr(el.textContent); return tokens.every(k => t.includes(k)); };
-  let count = 0;
+  let count = 0, countCards = 0, hasCards = false;
   // الجوال: بطاقات الطلاب
   document.querySelectorAll('#students-mobile-cards .mobile-card').forEach(card => {
     const ok = !tokens.length || match(card);
     card.style.display = ok ? '' : 'none';
-    if (ok) count++;
+    hasCards = true; if (ok) countCards++;
   });
   // الكمبيوتر: صفوف الجدول
   document.querySelectorAll('#students-body tr').forEach(row => {
@@ -2653,7 +2660,7 @@ function filterStudentsLocal() {
     if (ok) count++;
   });
   const counter = document.getElementById('search-counter');
-  if (counter) counter.textContent = tokens.length ? `${count} نتيجة` : '';
+  if (counter) counter.textContent = tokens.length ? `${hasCards && isMobile() ? countCards : count} نتيجة` : '';
 }
 
 // ===================== STUDENTS =====================
@@ -2736,11 +2743,15 @@ async function loadStudents() {
           </div>
         </div>`).join('') + '</div>';
     }
-  } else {
-    const tw = document.querySelector('#students-body-table')?.closest('.tw');
-    if (tw) tw.style.display = '';
-    const cardsEl = document.getElementById('students-mobile-cards');
-    if (cardsEl) cardsEl.style.display = 'none';
+  }
+  {
+    if (!isMobile()) {
+      const tw = document.querySelector('#students-body-table')?.closest('.tw');
+      if (tw) tw.style.display = '';
+      const cardsEl = document.getElementById('students-mobile-cards');
+      if (cardsEl) cardsEl.style.display = 'none';
+    }
+    // الجدول يُملأ دائماً (مخفياً على الجوال) ليعمل زر الطباعة والبحث على كل الأجهزة
     b.innerHTML = data?.length ? data.map((s,i)=>{
       const photo = s.photo ? `<img src="${s.photo}" class="avatar-sm">` : `<div class="avatar-placeholder">${svgAvatar(24)}</div>`;
       const parentBadge = s.parent_id ? `<span title="مرتبط بولي أمر" style="color:#1d6b3a;font-size:16px">👨‍👦</span>` : `<span title="لا يوجد حساب ولي أمر" style="color:var(--gray2);font-size:16px">👤</span>`;
@@ -2837,7 +2848,7 @@ async function saveStudent() {
       if (existing) {
         updates.parent_id = existing.id;
       } else {
-        const { data: authData, error } = await sb.auth.signUp({ email: parentEmail, password: parentPass });
+        const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPass });
         if (error) {
           alert('تنبيه: تعذر إنشاء حساب ولي الأمر (' + error.message + ').');
         } else if (authData.user) {
@@ -2852,7 +2863,7 @@ async function saveStudent() {
       if (existing) {
         updates.parent_id = existing.id;
       } else {
-        const { data: authData, error } = await sb.auth.signUp({ email: parentEmail, password: parentPhone });
+        const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPhone });
         if (!error && authData.user) {
           await sb.from('profiles').insert({ id: authData.user.id, full_name: parentName || ('ولي أمر ' + name), role:'parent', phone: parentPhone });
           updates.parent_id = authData.user.id;
@@ -2890,7 +2901,7 @@ async function saveStudent() {
     if (existing) {
       parentId = existing.id;
     } else {
-      const { data: authData, error } = await sb.auth.signUp({ email: parentEmail, password: parentPass });
+      const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPass });
       if (error) {
         alert('تنبيه: تعذر إنشاء حساب ولي الأمر (' + error.message + '). سيُحفظ الطالب بدون ربط.');
       } else if (authData.user) {
@@ -3291,6 +3302,8 @@ function printTable(title, tableId) {
   const table = document.getElementById(tableId);
   if (!table) return;
   const clone = table.cloneNode(true);
+  // لا نطبع الصفوف التي أخفاها البحث
+  clone.querySelectorAll('tbody tr').forEach(tr => { if (tr.style.display === 'none') tr.remove(); });
   // remove action columns and photo columns
   const headRow = clone.querySelector('thead tr');
   if (headRow) {

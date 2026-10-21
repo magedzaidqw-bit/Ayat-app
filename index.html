@@ -2814,6 +2814,31 @@ function resetStudentForm() {
   ['s-parent-name','s-parent-civilid','s-area','s-parent-relation'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   openM('m-student');
 }
+// ===== حساب ولي الأمر: يُنشأ بعميل منفصل حتى لا تُستبدل جلسة المحفظ/المدير الحالية =====
+async function ensureParentAccount(phone, pass, name, studentName) {
+  // 1) هل لولي الأمر حساب وملف موجود؟
+  try {
+    const { data: pid } = await sb.rpc('parent_id_by_phone', { p: phone });
+    if (pid) return { id: pid };
+  } catch(e) {}
+  // 2) إنشاء الحساب بعميل معزول (لا يمس جلسة المستخدم الحالي)
+  const iso = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'iso-parent-' + Date.now() } });
+  const email = phone + '@' + PHONE_DOMAIN;
+  const pw = pass || phone;
+  let uid = null;
+  const { data: su, error: suErr } = await iso.auth.signUp({ email, password: pw });
+  if (!suErr && su?.user && su.user.identities && su.user.identities.length) uid = su.user.id;
+  if (!uid) {
+    // الحساب موجود بلا ملف (حالة قديمة): نحاول الدخول به لإكمال الملف
+    const { data: si, error: siErr } = await iso.auth.signInWithPassword({ email, password: pw });
+    if (siErr || !si?.user) return { error: 'يوجد حساب بهذا الرقم بكلمة مرور مختلفة. اطلب من المدير ربطه.' };
+    uid = si.user.id;
+  }
+  const { error: pe } = await iso.from('profiles').insert({ id: uid, full_name: name || ('ولي أمر ' + studentName), role: 'parent', phone });
+  if (pe && !/duplicate|already/i.test(pe.message || '')) return { error: 'تعذر إنشاء ملف ولي الأمر: ' + pe.message };
+  return { id: uid };
+}
+
 async function saveStudent() {
   const name=v('s-name'), circle=v('s-circle'), civilId=v('s-civilid'), birth=v('s-birth');
   const parentPhone=v('s-parent-phone'), parentPass=v('s-parent-pass');
@@ -2841,42 +2866,23 @@ async function saveStudent() {
     if (photoUrl) updates.photo = photoUrl;
     if (civilPhotoUrl) updates.civil_id_photo = civilPhotoUrl;
 
-    // إنشاء حساب ولي الأمر إذا أُدخل رقم الجوال وكلمة المرور
-    if (parentPhone && parentPass) {
-      const parentEmail = parentPhone + '@' + PHONE_DOMAIN;
-      const { data: existing } = await sb.from('profiles').select('id').eq('phone', parentPhone).eq('role','parent').maybeSingle();
-      if (existing) {
-        updates.parent_id = existing.id;
-      } else {
-        const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPass });
-        if (error) {
-          alert('تنبيه: تعذر إنشاء حساب ولي الأمر (' + error.message + ').');
-        } else if (authData.user) {
-          await sb.from('profiles').insert({ id: authData.user.id, full_name: parentName || ('ولي أمر ' + name), role:'parent', phone: parentPhone });
-          updates.parent_id = authData.user.id;
-        }
-      }
-    } else if (parentPhone) {
-      // إذا أُدخل رقم الجوال بدون كلمة مرور — استخدم رقم الجوال كلمةً افتراضية
-      const parentEmail = parentPhone + '@' + PHONE_DOMAIN;
-      const { data: existing } = await sb.from('profiles').select('id').eq('phone', parentPhone).eq('role','parent').maybeSingle();
-      if (existing) {
-        updates.parent_id = existing.id;
-      } else {
-        const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPhone });
-        if (!error && authData.user) {
-          await sb.from('profiles').insert({ id: authData.user.id, full_name: parentName || ('ولي أمر ' + name), role:'parent', phone: parentPhone });
-          updates.parent_id = authData.user.id;
-        }
-      }
+    // ربط ولي الأمر: فقط إذا تغيّر الرقم أو لم يكن مرتبطاً (ولا نمسّ جلسة المستخدم الحالي)
+    let parentWarn = '';
+    const phoneChanged = !currentStudent || (currentStudent.parent_phone || '') !== (parentPhone || '');
+    if (parentPhone && (phoneChanged || !currentStudent.parent_id)) {
+      const r = await ensureParentAccount(parentPhone, parentPass, parentName, name);
+      if (r.id) updates.parent_id = r.id; else if (r.error) parentWarn = '\n\n⚠️ ' + r.error;
+    } else if (!parentPhone && currentStudent && currentStudent.parent_id) {
+      updates.parent_id = null;
     }
 
-    await sb.from('students').update(updates).eq('id', editingStudentId);
+    const { error: upErr } = await sb.from('students').update(updates).eq('id', editingStudentId);
+    if (upErr) { alert('❌ لم تُحفظ التعديلات: ' + (upErr.message || 'خطأ غير معروف')); return; }
     editingStudentId = null;
     document.querySelector('#m-student .mh h3').textContent = 'إضافة طالب';
     document.querySelector('#m-student .btn-pri').textContent = 'حفظ';
     closeM('m-student');
-    alert(updates.parent_id ? '✅ تم تحديث بيانات الطالب وربطه بولي الأمر' : '✅ تم تحديث بيانات الطالب');
+    alert((updates.parent_id ? '✅ تم تحديث بيانات الطالب وربطه بولي الأمر' : '✅ تم تحديث بيانات الطالب') + parentWarn);
     loadStudents();
     return;
   }
@@ -2894,21 +2900,10 @@ async function saveStudent() {
     return;
   }
 
-  let parentId = null;
-  if (parentPhone && parentPass) {
-    const parentEmail = parentPhone + '@' + PHONE_DOMAIN;
-    const { data: existing } = await sb.from('profiles').select('id').eq('phone', parentPhone).eq('role','parent').maybeSingle();
-    if (existing) {
-      parentId = existing.id;
-    } else {
-      const { data: authData, error } = await signUpIsolated({ email: parentEmail, password: parentPass });
-      if (error) {
-        alert('تنبيه: تعذر إنشاء حساب ولي الأمر (' + error.message + '). سيُحفظ الطالب بدون ربط.');
-      } else if (authData.user) {
-        await sb.from('profiles').insert({ id: authData.user.id, full_name: parentName || ('ولي أمر ' + name), role:'parent', phone: parentPhone });
-        parentId = authData.user.id;
-      }
-    }
+  let parentId = null, parentWarn = '';
+  if (parentPhone) {
+    const r = await ensureParentAccount(parentPhone, parentPass, parentName, name);
+    if (r.id) parentId = r.id; else if (r.error) parentWarn = '\n\n⚠️ ' + r.error;
   }
 
   const { error: insErr } = await sb.from('students').insert({
@@ -2924,7 +2919,7 @@ async function saveStudent() {
     return;
   }
   closeM('m-student');
-  alert(parentId ? '✅ تم حفظ الطالب وإنشاء حساب ولي الأمر.' : '✅ تم حفظ الطالب.');
+  alert((parentId ? '✅ تم حفظ الطالب وربطه بحساب ولي الأمر.' : '✅ تم حفظ الطالب.') + parentWarn);
   loadStudents();
 }
 async function delStudent(id) {
