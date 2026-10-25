@@ -1205,13 +1205,11 @@ function buildNav() {
   let tabs = [];
   if (CP.role === 'admin') {
     tabs = [
-      {id:'dashboard',l:'📊 الرئيسية'},{id:'parent-messages',l:'✉️ رسائل أولياء الأمور'},{id:'circles',l:'🕌 المراكز والحلقات'},
-      {id:'sup-home',l:'🔔 متابعة الحلقات والنشاط'},
-      {id:'teachers',l:'👨‍🏫 المحفظون'},{id:'supervisors',l:'🧑‍💼 المشرفون'},
-      {id:'students',l:'🎓 الطلاب'},{id:'attendance',l:'📅 الحضور'},
-      {id:'memorization',l:'📖 الحفظ'},{id:'behavior',l:'🌟 السلوك'},
-      {id:'evaluations',l:'⭐ تقييم المحفظين'},{id:'donors',l:'💚 المتبرعون'},
-      {id:'reports-view',l:'📊 التقارير الشهرية'},{id:'top3',l:'🏆 الفرسان'}
+      {id:'dashboard',l:'📊 الرئيسية'},{id:'sup-home',l:'🔔 متابعة الحلقات والنشاط'},{id:'circles',l:'🕌 المراكز والحلقات'},
+      {id:'teachers',l:'👨‍🏫 المحفظون'},{id:'supervisors',l:'🧑‍💼 المشرفون'},{id:'students',l:'🎓 الطلاب'},
+      {id:'attendance',l:'📅 الحضور'},{id:'memorization',l:'📖 الحفظ'},{id:'behavior',l:'🌟 السلوك'},
+      {id:'evaluations',l:'⭐ تقييم المحفظين'},{id:'reports-view',l:'📊 التقارير الشهرية'},{id:'top3',l:'🏆 الفرسان'},
+      {id:'parent-messages',l:'✉️ رسائل أولياء الأمور'},{id:'donors',l:'💚 المتبرعون'}
     ];
   } else if (CP.role === 'supervisor') {
     tabs = [{id:'sup-home',l:'🔔 متابعة حلقاتي والنشاط'},{id:'sup-compare',l:'📊 مقارنة الحلقات'},{id:'evaluations',l:'⭐ تقييم المحفظين'},{id:'reports-view',l:'📊 التقارير الشهرية'},{id:'top3',l:'🏆 الفرسان'}];
