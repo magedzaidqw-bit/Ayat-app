@@ -6483,6 +6483,10 @@ async function generateAchievementCard() {
     periodLabel = `${MONTHS_AR[month]} ${year}`;
   }
 
+  const circleInfoP = Promise.race([
+    sb.from('students').select('circles(name,teacher_name)').eq('id', sid).maybeSingle().then(r => r.data, () => null),
+    new Promise(res => setTimeout(() => res(null), 1500))
+  ]);
   const [attRes, memoRes, reviewRes, behRes] = await Promise.all([
     sb.from('attendance').select('status').eq('student_id', sid).gte('date', startDate).lte('date', endDate),
     sb.from('memorization_log').select('mastery,verses_count,surah_to').eq('student_id', sid).gte('date', startDate).lte('date', endDate).order('date', {ascending:false}),
@@ -6508,7 +6512,7 @@ async function generateAchievementCard() {
   // معلومات الحلقة والمحفظ
   let circleName = '', teacherName = '';
   try {
-    const { data: stu } = await sb.from('students').select('circles(name,teacher_name)').eq('id', sid).maybeSingle();
+    const stu = await circleInfoP;
     circleName = stu?.circles?.name || ''; teacherName = stu?.circles?.teacher_name || '';
   } catch(e) {}
 
