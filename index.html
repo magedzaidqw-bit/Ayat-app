@@ -2699,6 +2699,11 @@ function filterStudentsLocal() {
 }
 
 // ===================== STUDENTS =====================
+function consentBadge(s){
+  if(!s.photo_consent) return '';
+  const d = s.photo_consent_at ? new Date(s.photo_consent_at).toLocaleDateString('ar-KW') : '';
+  return ` <span title="ولي الأمر وافق على ظهور الطالب في الصور${d ? ' — ' + d : ''}" style="background:#e3f3e8;color:#1d6b3a;border-radius:50px;padding:1px 7px;font-size:10px;font-weight:700;white-space:nowrap">📷 موافقة${d ? ' ' + d : ''}</span>`;
+}
 async function loadStudents() {
   showLoading('students-body');
   const cf = document.getElementById('filter-circle')?.value;
@@ -2765,7 +2770,7 @@ async function loadStudents() {
       cardsEl.style.display = 'block';
       cardsEl.innerHTML = '<div class="mobile-card-list">' + (data||[]).map(s => `
         <div class="mobile-card">
-          <div class="mobile-card-name">${h(s.full_name)}</div>
+          <div class="mobile-card-name">${h(s.full_name)}${consentBadge(s)}</div>
           <div class="mobile-card-row"><span>الحلقة</span><span>${s.circles?.name||'—'}</span></div>
           <div class="mobile-card-row"><span>المحفظ</span><span>${s.circles?.teacher_name||'—'}</span></div>
           <div class="mobile-card-row"><span>النقاط</span><span>⭐ ${s.total_points||0}</span></div>
@@ -2793,7 +2798,7 @@ async function loadStudents() {
       const civilBtn = s.civil_id_photo
         ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="viewCivilId('${s.civil_id_photo}')" title="عرض البطاقة المدنية">🪪 عرض</button> <button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')" title="حذف البطاقة المدنية">🗑️</button>`
         : `<span title="لا توجد بطاقة مدنية مرفوعة" style="color:var(--gray2);font-size:13px">🪪✕</span>`;
-      return `<tr><td style="color:var(--mid);font-weight:700">${i+1}</td><td>${photo}</td><td><strong>${h(s.full_name)}</strong></td><td>${s.circles?.name||'—'}</td><td>${s.circles?.teacher_name||'—'}</td><td>${s.civil_id||'—'}</td><td><span class="pts">⭐ ${s.total_points||0}</span></td>
+      return `<tr><td style="color:var(--mid);font-weight:700">${i+1}</td><td>${photo}</td><td><strong>${h(s.full_name)}</strong>${consentBadge(s)}</td><td>${s.circles?.name||'—'}</td><td>${s.circles?.teacher_name||'—'}</td><td>${s.civil_id||'—'}</td><td><span class="pts">⭐ ${s.total_points||0}</span></td>
         <td style="white-space:nowrap">${civilBtn} <button class="btn btn-sm" style="background:linear-gradient(135deg,#a89655,#2f6767);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})" title="بطاقة الإنجاز">🏅</button> <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${esc(s.full_name)}')">+نقاط</button> <button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button> ${parentBadge} <button class="btn btn-r btn-sm" onclick="delStudent('${s.id}')">حذف</button></td></tr>`;
     }).join('') : emptyRow(8,'لا يوجد طلاب بعد');
   }
