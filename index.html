@@ -4981,24 +4981,33 @@ async function printTop3Poster() {
   const _sp = {};
   await Promise.all(picks.map(async t => { if (t.student.photo) _sp[t.student.photo] = await signedPhotoUrl(t.student.photo); }));
   const periodDays = parseInt(document.getElementById('top3-period')?.value || '30');
-  const periodLabel = periodDays === 0 ? 'كل الفترة' : `آخر ${periodDays} يوماً`;
+  const periodLabel = periodDays === 0 ? 'كل الفترة' : periodDays === 7 ? 'أسبوعياً — آخر 7 أيام' : `آخر ${periodDays} يوماً`;
   const sel = document.getElementById('top3-circle');
   const circleName = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '';
   const teacher = (CP.role==='teacher' && CP.full_name) ? CP.full_name : '';
+  const T = { p:'#0c2424', p2:'#2d6262', g:'#a89655', g2:'#ece4c6' };
   const rankTxt = ['المركز الأول','المركز الثاني','المركز الثالث'];
-  const col = ['#a89655','#8a96a3','#b0703a'];
+  const rankNum = ['١','٢','٣'];
+  const ringCol = ['#a89655','#8a96a3','#b0703a'];
+  const blockBg = ['linear-gradient(180deg,#e8c15a,#b8860b)','linear-gradient(180deg,#dfe4e9,#8a96a3)','linear-gradient(180deg,#e0a56c,#8a4f1f)'];
+  const blockH = ['44mm','32mm','24mm'];
+  const pattern = "url(\"data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><g fill='none' stroke='${T.g}' stroke-opacity='.28' stroke-width='1'><path d='M22 3l5.5 8.8 9.9-1.1-1.1 9.9L44 22l-7.7 1.4 1.1 9.9-9.9-1.1L22 41l-5.5-8.8-9.9 1.1 1.1-9.9L0 22l7.7-1.4-1.1-9.9 9.9 1.1z'/><circle cx='22' cy='22' r='5'/></g></svg>`) + "\")";
   const card = (rankIdx) => {
     const t = _top3Selected[rankIdx];
     if (!t) return '<div></div>';
     const big = rankIdx===0;
-    const ph = t.student.photo ? `<img src="${_sp[t.student.photo] || t.student.photo}">` : `<span>${svgAvatar(big?90:64)}</span>`;
-    return `<div class="c r${rankIdx+1}" style="--c:${col[rankIdx]}">
-      <div class="md">${svgMedal(rankIdx, big?64:50)}</div>
-      <div class="ph ${big?'big':''}">${ph}</div>
-      <div class="rk">${rankTxt[rankIdx]}</div>
-      <div class="nm">${escapeHtml(t.student.full_name)}</div>
-      <div class="sc">${t.total.toFixed(1)}<small>/15</small></div>
-      <div class="ch"><span>📖 الحفظ ${t.memoScore.toFixed(1)}</span><span>📅 الحضور ${t.present}/${t.totalAtt}</span><span>🌟 السلوك ${t.behScore.toFixed(1)}</span></div>
+    const ph = t.student.photo ? `<img src="${_sp[t.student.photo] || t.student.photo}">` : `<span>${svgAvatar(big?120:84, '#b9c4bd')}</span>`;
+    return `<div class="col">
+      <div class="av ${big?'big':''}" style="--rc:${ringCol[rankIdx]}">
+        <div class="ph">${ph}</div>
+        <div class="mdl">${svgMedal(rankIdx, big?44:36)}</div>
+      </div>
+      <div class="nm ${big?'bignm':''}">${escapeHtml(t.student.full_name)}</div>
+      <div class="sc">${t.total.toFixed(1)}<small> / 15</small></div>
+      <div class="blk" style="height:${blockH[rankIdx]};background:${blockBg[rankIdx]}">
+        <div class="num">${rankNum[rankIdx]}</div>
+        <div class="rk">${rankTxt[rankIdx]}</div>
+      </div>
     </div>`;
   };
   const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فرسان الحلقة</title>
@@ -5007,46 +5016,55 @@ async function printTop3Poster() {
 @page{size:A4 portrait;margin:0}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:210mm;height:285mm;max-height:285mm;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{font-family:'Cairo',sans-serif;color:#0c2424;overflow:hidden}
-.poster{width:210mm;height:284mm;overflow:hidden;page-break-after:avoid;padding:8mm;background:#fffaf0;position:relative}
-.f1{height:100%;border:2.5mm double #a89655;border-radius:4mm;padding:3mm;background:#fffdf6}
-.f2{height:100%;border:.6mm solid #2d6262;border-radius:2mm;padding:6mm 8mm 4mm;display:flex;flex-direction:column;align-items:center;text-align:center;background:radial-gradient(circle at 50% 0,#fff6dc 0,#fffdf6 55%)}
-.logo{width:17mm;height:17mm;border-radius:50%;border:.8mm solid #a89655;object-fit:cover}
-.org{font-family:'Amiri',serif;font-size:19pt;font-weight:700;color:#2d6262;margin-top:2mm}
-.orn{color:#a89655;letter-spacing:4mm;font-size:12pt;margin:1mm 0}
-.verse{font-family:'Amiri',serif;font-size:17pt;color:#7a5a1c;margin:1mm 0 3mm}
-.ttl{font-family:'Amiri',serif;font-size:32pt;font-weight:700;color:#0c2424;line-height:1.25}
-.ttl b{color:#a89655}
-.per{margin-top:2mm;background:#2d6262;color:#ece4c6;padding:1.5mm 8mm;border-radius:50px;font-size:12pt;font-weight:700}
-.pod{flex:1;width:100%;display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:4mm;align-items:center;margin:3mm 0}
-.c{border:.7mm solid var(--c);border-top-width:2.2mm;border-radius:4mm;background:#fff;padding:4mm 2mm;display:flex;flex-direction:column;align-items:center;position:relative}
-.r1{padding-bottom:5mm;box-shadow:0 0 0 1.2mm #ece4c6}
-.r2{margin-bottom:0}.r3{margin-bottom:0}
-.md{font-size:24pt;line-height:1}
-.r1 .md{font-size:32pt}
-.ph{width:27mm;height:27mm;border-radius:50%;border:1.2mm solid var(--c);overflow:hidden;background:#f3ece0;display:flex;align-items:center;justify-content:center;font-size:30pt;margin:2mm 0}
-.ph.big{width:38mm;height:38mm}
+body{font-family:'Cairo',sans-serif;color:${T.p};overflow:hidden}
+.poster{width:210mm;height:284mm;overflow:hidden;position:relative;background:#fffaf0;display:flex;flex-direction:column}
+.frame{position:absolute;inset:5mm;border:.8mm solid ${T.g};border-radius:3mm;pointer-events:none;z-index:5}
+.frame:after{content:'';position:absolute;inset:1.6mm;border:.3mm solid ${T.g};border-radius:2mm;opacity:.7}
+.hd{height:71mm;background:linear-gradient(135deg,${T.p} 0%,${T.p2} 100%);background-image:${pattern},linear-gradient(135deg,${T.p} 0%,${T.p2} 100%);color:#fff;text-align:center;padding:11mm 10mm 0;position:relative}
+.hd .logo{width:27mm;height:27mm;border-radius:50%;background:#fff;border:1mm solid ${T.g};padding:.8mm;object-fit:cover}
+.org{font-family:'Amiri',serif;font-size:24pt;font-weight:700;color:${T.g2};margin-top:2.5mm;line-height:1.3}
+.sub{font-size:10.5pt;color:rgba(255,255,255,.78);margin-top:.8mm}
+.strip{height:3.5mm;background:repeating-linear-gradient(90deg,${T.g} 0 6mm,${T.p} 6mm 8mm)}
+.body{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:5mm 14mm 0}
+.verse{font-family:'Amiri',serif;font-size:19pt;color:#7a5a1c;line-height:1.7}
+.ttl{font-family:'Amiri',serif;font-size:46pt;font-weight:700;color:${T.p};line-height:1.15;margin-top:1mm}
+.cir{margin-top:2mm;display:inline-block;background:${T.p2};color:${T.g2};padding:2mm 12mm;border-radius:50px;font-size:17pt;font-weight:900}
+.per{margin-top:2mm;font-size:12pt;color:#666;font-weight:700}
+.pod{flex:1;width:100%;display:grid;grid-template-columns:1fr 1.18fr 1fr;gap:3mm;align-items:end;padding-top:3mm}
+.col{display:flex;flex-direction:column;align-items:center;min-width:0}
+.av{position:relative;width:36mm;height:36mm;margin-bottom:2mm}
+.av.big{width:50mm;height:50mm}
+.ph{width:100%;height:100%;border-radius:50%;border:1.6mm solid var(--rc);overflow:hidden;background:#f1ebdd;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1.4mm #fff,0 0 0 1.9mm var(--rc)}
 .ph img{width:100%;height:100%;object-fit:cover}
-.rk{font-weight:900;font-size:12pt;color:var(--c)}
-.nm{font-family:'Amiri',serif;font-weight:700;font-size:15pt;margin:1mm 0;line-height:1.35}
-.r1 .nm{font-size:19pt}
-.sc{font-weight:900;font-size:22pt;color:#2d6262}.sc small{font-size:11pt;color:#666}
-.ch{display:flex;flex-direction:column;gap:.5mm;font-size:9.5pt;color:#444;margin-top:1.5mm}
-.msg{margin-top:3mm;font-family:'Amiri',serif;font-size:17pt;color:#2d6262;font-weight:700}
-.msg2{font-size:11pt;color:#555;margin-top:1mm}
-.ft{margin-top:2mm;width:100%;display:flex;justify-content:space-between;font-size:10pt;color:#555;border-top:.3mm solid #a89655;padding-top:2mm}
-</style></head><body><div class="poster"><div class="f1"><div class="f2">
-<img class="logo" src="${printLogoUrl()}" onerror="this.style.display='none'">
-<div class="org">جمعية آيات الخيرية</div>
-<div class="orn">✦ ✦ ✦</div>
-<div class="verse">${QURAN_COMPETE_VERSE}</div>
-<div class="ttl">فرسان حلقة <b>${escapeHtml(circleName)}</b></div>
-<div class="per">الفترة: ${periodLabel}</div>
-<div class="pod">${card(1)}${card(0)}${card(2)}</div>
-<div class="msg">بارك الله فيكم وجعلكم من أهل القرآن 🌟</div>
-<div class="msg2">هنيئاً لكم هذا التميز — والباب مفتوح لكل مجتهد ليكون من الفرسان</div>
+.mdl{position:absolute;bottom:-4mm;left:50%;transform:translateX(-50%);line-height:0}
+.nm{font-family:'Amiri',serif;font-weight:700;font-size:17pt;line-height:1.35;margin-top:5mm;padding:0 1mm}
+.nm.bignm{font-size:22pt}
+.sc{font-weight:900;font-size:20pt;color:${T.p2};margin:.5mm 0 2.5mm}
+.sc small{font-size:11pt;color:#777;font-weight:700}
+.blk{width:100%;border-radius:3mm 3mm 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-shadow:0 .4mm .8mm rgba(0,0,0,.35)}
+.blk .num{font-family:'Amiri',serif;font-size:36pt;font-weight:700;line-height:1}
+.blk .rk{font-size:11pt;font-weight:900;margin-top:1mm}
+.msg{width:100%;background:${T.p};color:${T.g2};padding:5mm 12mm 4.5mm;text-align:center}
+.msg .m1{font-family:'Amiri',serif;font-size:22pt;font-weight:700;color:${T.g2}}
+.msg .m2{font-size:11pt;color:rgba(255,255,255,.75);margin-top:1mm}
+.ft{width:100%;display:flex;justify-content:space-between;font-size:10.5pt;color:#fff;background:${T.p2};padding:3mm 14mm 8mm}
+</style></head><body><div class="poster"><div class="frame"></div>
+<div class="hd">
+  <img class="logo" src="${printLogoUrl()}" onerror="this.style.display='none'">
+  <div class="org">جمعية آيات الخيرية</div>
+  <div class="sub">إدارة حلقات تحفيظ القرآن الكريم</div>
+</div>
+<div class="strip"></div>
+<div class="body">
+  <div class="verse">${QURAN_COMPETE_VERSE}</div>
+  <div class="ttl">فرسان الحلقة</div>
+  <div class="cir">${escapeHtml(circleName)}</div>
+  <div class="per">${periodLabel}</div>
+  <div class="pod">${card(1)}${card(0)}${card(2)}</div>
+</div>
+<div class="msg"><div class="m1">بارك الله فيكم وجعلكم من أهل القرآن</div><div class="m2">هنيئاً لكم هذا التميز — والباب مفتوح لكل مجتهد ليكون من الفرسان</div></div>
 <div class="ft"><span>${teacher?'المحفظ: '+escapeHtml(teacher):'&nbsp;'}</span><span>${arDateNow()}</span></div>
-</div></div></div></body></html>`;
+</div></body></html>`;
   printStandalone(html);
 }
 
