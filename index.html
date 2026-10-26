@@ -608,6 +608,7 @@ tbody tr:hover { background:#fbfaf6; }
       <button class="auth-tab active" id="tab-admin" onclick="switchAuthTab('admin')">مدير</button>
       <button class="auth-tab" id="tab-teacher" onclick="switchAuthTab('teacher')">محفظ / مشرف</button>
       <button class="auth-tab" id="tab-parent" onclick="switchAuthTab('parent')">ولي أمر</button>
+      <button class="auth-tab" id="tab-student" onclick="switchAuthTab('student')">طالب</button>
     </div>
 
     <a href="donate.html" style="display:flex;align-items:center;justify-content:center;gap:10px;
@@ -652,9 +653,15 @@ tbody tr:hover { background:#fbfaf6; }
       <div class="fg"><label>كلمة المرور</label><input type="password" id="lpass3" placeholder="••••••••"></div>
     </div>
 
+    <!-- Civil ID login (student) -->
+    <div id="login-student-form" style="display:none">
+      <div class="fg"><label>الرقم المدني للطالب</label><input type="text" id="lstudent" placeholder="الرقم المدني" inputmode="numeric"></div>
+      <div class="fg"><label>كلمة المرور <span style="font-size:11px;color:var(--mid)">(اتركها فارغة للدخول برقمك المدني)</span></label><input type="password" id="lpass4" placeholder="••••••••"></div>
+    </div>
+
     <button class="btn-pri" id="lbtn">دخول</button>
     <button type="button" onclick="openReg(false)" style="width:100%;margin-top:10px;padding:13px;border:2px dashed var(--gold);border-radius:14px;background:#fffaf0;color:var(--gd);font-family:'Cairo',sans-serif;font-size:14px;font-weight:700;cursor:pointer">📝 تسجيل طالب جديد (لأولياء الأمور)</button>
-    <div style="text-align:center;margin-top:14px;font-size:11px;color:#9AA79A">إصدار التطبيق: 2026.07.05-2</div>
+    <div style="text-align:center;margin-top:14px;font-size:11px;color:#9AA79A">إصدار التطبيق: 2026.10.26</div>
   </div>
 </div>
 
@@ -745,6 +752,7 @@ function signUpIsolated(creds) { return sbAuthTmp.auth.signUp(creds); }
 const CIVIL_DOMAIN = 'test.com';
 const PHONE_DOMAIN = 'parent.test.com';
 const PARENT_DOMAIN = 'parent.ayat.local';
+const STUDENT_DOMAIN = 'student.test.com';
 
 let CU = null, CP = null, authMode = 'admin';
 
@@ -773,6 +781,8 @@ function switchAuthTab(mode) {
   document.getElementById('tab-admin').classList.toggle('active', mode === 'admin');
   document.getElementById('tab-teacher').classList.toggle('active', mode === 'teacher');
   document.getElementById('tab-parent').classList.toggle('active', mode === 'parent');
+  document.getElementById('tab-student').classList.toggle('active', mode === 'student');
+  document.getElementById('login-student-form').style.display = mode === 'student' ? 'block' : 'none';
   document.getElementById('login-email-form').style.display = mode === 'admin' ? 'block' : 'none';
   document.getElementById('login-civilid-form').style.display = mode === 'teacher' ? 'block' : 'none';
   document.getElementById('login-phone-form').style.display = mode === 'parent' ? 'block' : 'none';
@@ -796,6 +806,12 @@ async function doLogin() {
     email = civilId + '@' + CIVIL_DOMAIN;
     // إذا لم تُدخل كلمة مرور، استخدم الرقم المدني افتراضياً
     if (!pass) pass = civilId;
+  } else if (authMode === 'student') {
+    const sid = document.getElementById('lstudent').value.trim();
+    pass = document.getElementById('lpass4').value;
+    if (!sid) { showAlert('auth-alert','أدخل الرقم المدني','err'); btn.disabled=false; btn.textContent='دخول'; return; }
+    email = sid + '@' + STUDENT_DOMAIN;
+    if (!pass) pass = sid;
   } else {
     const phone = document.getElementById('lphone').value.trim();
     pass = document.getElementById('lpass3').value;
@@ -808,7 +824,7 @@ async function doLogin() {
   try {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) {
-      const msgMap = { teacher:'الرقم المدني غير صحيح، أو تواصل مع المدير لتفعيل حسابك', parent:'رقم الجوال أو كلمة المرور غير صحيحة' };
+      const msgMap = { teacher:'الرقم المدني غير صحيح، أو تواصل مع المدير لتفعيل حسابك', parent:'رقم الجوال أو كلمة المرور غير صحيحة', student:'الرقم المدني غير صحيح، أو لم يُفعَّل دخولك بعد. اطلب من المحفظ تفعيله' };
       showAlert('auth-alert', msgMap[authMode] || ('خطأ: ' + error.message), 'err');
       btn.disabled = false; btn.textContent = 'دخول';
       return;
@@ -1257,8 +1273,9 @@ function buildNav() {
       {id:'behavior',l:'🌟 السلوك'},{id:'weekly-report',l:'📨 التقرير الأسبوعي'},{id:'monthly-report',l:'📋 التقرير الشهري'},{id:'top3',l:'🏆 الفرسان'}
     ];
   } else {
-    tabs = [{id:'parent',l:'👨‍👦 متابعة ابني'}];
+    tabs = [CP.role==='student' ? {id:'parent',l:'🎓 مستواي'} : {id:'parent',l:'👨‍👦 متابعة ابني'}];
   }
+  tabs.push({id:'weekly-value',l:'🌟 قيمة الأسبوع'});
   nav.innerHTML = tabs.map(t => `<button class="nb" id="nb-${t.id}" onclick="goPage('${t.id}')">${t.l}</button>`).join('');
 }
 
@@ -1297,6 +1314,7 @@ function loadPage(id) {
     'weekly-report': initWeeklyReport, 'monthly-report': initMonthlyReport, 'reports-view': initReportsView,
     'donors': loadDonors,
     'parent-messages': loadParentMessages,
+    'weekly-value': loadWeeklyValue,
     'reg-requests': loadRegRequests
   };
   if (loaders[id]) loaders[id]();
@@ -1536,14 +1554,23 @@ function buildPages() {
     <div id="reports-list"></div>
   </div>
 
+  <div class="page" id="p-weekly-value">
+    <div class="stitle">🌟 قيمة الأسبوع</div>
+    <div id="wv-current"></div>
+    <div id="wv-editor"></div>
+    <div id="wv-history"></div>
+  </div>
+
   <div class="page" id="p-parent">
-    <div class="stitle">👨‍👦 متابعة ابني</div>
-    <div style="margin-bottom:14px"><button class="btn btn-o btn-sm" onclick="openReg(true)">➕ تسجيل ابن جديد</button></div>
+    <div class="stitle" id="parent-title">👨‍👦 متابعة ابني</div>
+    <div id="wv-strip-parent"></div>
+    <div id="parent-reg-wrap" style="margin-bottom:14px"><button class="btn btn-o btn-sm" onclick="openReg(true)">➕ تسجيل ابن جديد</button></div>
     <div id="parent-content"><div class="empty"><div class="ei">⏳</div><p>جارٍ التحميل...</p></div></div>
   </div>
 
   <div class="page" id="p-teacher-home">
     <div class="stitle">🏠 حلقتي</div>
+    <div id="wv-strip-teacher"></div>
     <div id="teacher-content"><div class="empty"><div class="ei">⏳</div><p>جارٍ التحميل...</p></div></div>
   </div>
 
@@ -2784,7 +2811,7 @@ async function loadStudents() {
             ${s.civil_id_photo ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="viewCivilId('${s.civil_id_photo}')">🪪 عرض البطاقة</button><button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')">🗑️</button>` : ''}
             <button class="btn btn-sm" style="background:linear-gradient(135deg,#a89655,#2f6767);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})">🏅 بطاقة الإنجاز</button>
             <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${esc(s.full_name)}')">+نقاط</button>
-            <button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button>
+            ${studentLoginBtn(s)}<button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button>
             <button class="btn btn-r btn-sm" onclick="delStudent('${s.id}')">حذف</button>
           </div>
         </div>`).join('') + '</div>';
@@ -2805,10 +2832,104 @@ async function loadStudents() {
         ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="viewCivilId('${s.civil_id_photo}')" title="عرض البطاقة المدنية">🪪 عرض</button> <button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')" title="حذف البطاقة المدنية">🗑️</button>`
         : `<span title="لا توجد بطاقة مدنية مرفوعة" style="color:var(--gray2);font-size:13px">🪪✕</span>`;
       return `<tr><td style="color:var(--mid);font-weight:700">${i+1}</td><td>${photo}</td><td><strong>${h(s.full_name)}</strong>${consentBadge(s)}</td><td>${s.circles?.name||'—'}</td><td>${s.circles?.teacher_name||'—'}</td><td>${s.civil_id||'—'}</td><td><span class="pts">⭐ ${s.total_points||0}</span></td>
-        <td style="white-space:nowrap">${civilBtn} <button class="btn btn-sm" style="background:linear-gradient(135deg,#a89655,#2f6767);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})" title="بطاقة الإنجاز">🏅</button> <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${esc(s.full_name)}')">+نقاط</button> <button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button> ${parentBadge} <button class="btn btn-r btn-sm" onclick="delStudent('${s.id}')">حذف</button></td></tr>`;
+        <td style="white-space:nowrap">${civilBtn} <button class="btn btn-sm" style="background:linear-gradient(135deg,#a89655,#2f6767);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})" title="بطاقة الإنجاز">🏅</button> <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${esc(s.full_name)}')">+نقاط</button> ${studentLoginBtn(s)}<button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button> ${parentBadge} <button class="btn btn-r btn-sm" onclick="delStudent('${s.id}')">حذف</button></td></tr>`;
     }).join('') : emptyRow(8,'لا يوجد طلاب بعد');
   }
 }
+
+// ===================== دخول الطالب (نافذة الطالب) =====================
+function studentLoginBtn(s) {
+  if (!['admin','teacher'].includes(CP.role)) return '';
+  if (s.user_id) return `<span title="دخول الطالب مُفعَّل" style="font-size:12px;color:#1d6b3a;font-weight:700;margin:0 4px">🎓✓</span>`;
+  if (!s.civil_id || !String(s.civil_id).trim()) return `<span title="أضف الرقم المدني للطالب أولاً" style="font-size:12px;color:var(--gray2);margin:0 4px">🎓✕</span>`;
+  return `<button class="btn btn-sm" style="background:#e8f5e9;color:#1d6b3a;border:1px solid #b9dcc1;font-weight:700" onclick="activateStudentLogin('${s.id}')" title="تفعيل دخول الطالب بنافذته">🎓 تفعيل دخوله</button> `;
+}
+async function createStudentAccount(s) {
+  const sid = String(s.civil_id).trim();
+  const iso = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'iso-student-' + Date.now() + Math.random() } });
+  const email = sid + '@' + STUDENT_DOMAIN;
+  let uid = null;
+  const { data: su, error: suErr } = await iso.auth.signUp({ email, password: sid });
+  if (!suErr && su?.user && su.user.identities && su.user.identities.length) uid = su.user.id;
+  if (!uid) {
+    const { data: si, error: siErr } = await iso.auth.signInWithPassword({ email, password: sid });
+    if (siErr || !si?.user) return { error: 'يوجد حساب بهذا الرقم المدني بكلمة مرور مختلفة' };
+    uid = si.user.id;
+  }
+  const { error: pe } = await iso.from('profiles').insert({ id: uid, full_name: s.full_name, role: 'student', civil_id: sid });
+  if (pe && !/duplicate|already/i.test(pe.message || '')) return { error: 'تعذر إنشاء ملف الطالب: ' + pe.message };
+  const { error: le } = await sb.rpc('link_student_account', { p_student: s.id, p_user: uid });
+  if (le) return { error: 'تعذر ربط الحساب: ' + le.message };
+  return { id: uid };
+}
+async function activateStudentLogin(id) {
+  const s = (window._studentsCache||[]).find(x=>x.id===id);
+  if (!s) return;
+  if (!confirm('تفعيل دخول الطالب «' + s.full_name + '»؟\n\nسيدخل من تبويب «طالب» برقمه المدني (' + s.civil_id + ') وكلمة المرور تكون رقمه المدني نفسه، ويستطيع تغييرها لاحقاً.')) return;
+  const r = await createStudentAccount(s);
+  if (r.error) { alert('⚠️ ' + r.error); return; }
+  alert('✅ تم تفعيل دخول الطالب. يدخل من تبويب «طالب» برقمه المدني.');
+  loadStudents();
+}
+
+// ===================== القيمة الأسبوعية =====================
+async function getCurrentWeeklyValue() {
+  const { data } = await sb.from('weekly_values').select('*').order('week_start', { ascending: false }).order('created_at', { ascending: false }).limit(1);
+  return data && data[0] ? data[0] : null;
+}
+function weeklyValueCardHtml(w, big) {
+  if (!w) return `<div style="background:white;border-radius:18px;padding:22px;text-align:center;color:var(--mid);box-shadow:var(--shadow-sm)"><div style="font-size:32px;opacity:.4">🌟</div><div style="font-size:13px;margin-top:6px">لم تُحدَّد قيمة هذا الأسبوع بعد</div></div>`;
+  const d = new Date(w.week_start + 'T00:00:00').toLocaleDateString('ar-KW', { day: 'numeric', month: 'long', year: 'numeric' });
+  return `<div style="background:linear-gradient(135deg,#0c2424,#2d6262);border-radius:20px;padding:${big?'24px':'16px 18px'};color:white;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:var(--shadow-sm)">
+    <div style="position:absolute;top:-25px;left:-25px;width:110px;height:110px;border-radius:50%;background:rgba(168,150,85,0.10)"></div>
+    <div style="position:relative">
+      <div style="font-size:12px;color:var(--gold3);opacity:.9;margin-bottom:6px">🌟 القيمة التربوية لهذا الأسبوع</div>
+      <div style="font-family:'Amiri',serif;font-size:${big?'30px':'22px'};font-weight:700;color:var(--gold3);margin-bottom:8px">${h(w.title)}</div>
+      <div style="font-size:${big?'15px':'13px'};line-height:2;white-space:pre-wrap;opacity:.95">${h(w.body)}</div>
+      <div style="font-size:11px;opacity:.55;margin-top:10px">منذ ${d}</div>
+    </div></div>`;
+}
+async function renderWeeklyStrip(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  try {
+    const w = await getCurrentWeeklyValue();
+    el.innerHTML = w ? weeklyValueCardHtml(w, false) : '';
+  } catch (e) { el.innerHTML = ''; }
+}
+async function loadWeeklyValue() {
+  const cur = document.getElementById('wv-current'), ed = document.getElementById('wv-editor'), hi = document.getElementById('wv-history');
+  cur.innerHTML = '<div class="empty"><div class="ei">⏳</div><p>جارٍ التحميل...</p></div>';
+  const { data: list } = await sb.from('weekly_values').select('*').order('week_start', { ascending: false }).order('created_at', { ascending: false }).limit(20);
+  const w = list && list[0];
+  cur.innerHTML = weeklyValueCardHtml(w, true);
+  const canEdit = ['admin','supervisor'].includes(CP.role);
+  ed.innerHTML = canEdit ? `<div class="card" style="margin-bottom:14px"><div class="ch"><h3>✍️ تحديد قيمة جديدة للأسبوع</h3></div><div class="cb">
+      <div class="fg"><label>القيمة</label><input type="text" id="wv-title" maxlength="60" placeholder="مثال: الصدق"></div>
+      <div class="fg"><label>شرح مختصر وما ينبغي أن يهتم به المحفظ ويطبّقه مع الطلاب</label><textarea id="wv-body" rows="5" maxlength="800" placeholder="اكتب نقاطاً مختصرة..."></textarea></div>
+      <button class="btn btn-g" onclick="saveWeeklyValue()">📌 نشر القيمة للجميع</button>
+      <div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">تظهر لجميع المحفظين والطلاب وأولياء الأمور، وتبقى حتى تنشر قيمة جديدة.</div>
+    </div></div>` : '';
+  hi.innerHTML = list && list.length > 1 ? `<div class="card"><div class="ch"><h3>📚 القيم السابقة</h3></div><div class="cb">` + list.slice(1).map(x => `
+      <div style="padding:10px 0;border-bottom:1px solid var(--gray2);display:flex;gap:10px;align-items:flex-start;justify-content:space-between">
+        <div><strong style="color:var(--gd)">${h(x.title)}</strong><div style="font-size:12px;color:var(--mid);line-height:1.8;white-space:pre-wrap">${h(x.body)}</div><div style="font-size:11px;color:var(--gray2)">${x.week_start}</div></div>
+        ${canEdit ? `<button class="btn btn-r btn-sm" onclick="delWeeklyValue('${x.id}')">حذف</button>` : ''}
+      </div>`).join('') + `</div></div>` : '';
+}
+async function saveWeeklyValue() {
+  const title = (document.getElementById('wv-title').value || '').trim();
+  const body = (document.getElementById('wv-body').value || '').trim();
+  if (!title || !body) { alert('اكتب القيمة وشرحها'); return; }
+  const { error } = await sb.from('weekly_values').insert({ title, body });
+  if (error) { alert('تعذر الحفظ: ' + error.message); return; }
+  loadWeeklyValue();
+}
+async function delWeeklyValue(id) {
+  if (!confirm('حذف هذه القيمة؟')) return;
+  await sb.from('weekly_values').delete().eq('id', id);
+  loadWeeklyValue();
+}
+
 let editingStudentId = null;
 async function editStudent(id) {
   const s = (window._studentsCache||[]).find(x=>x.id===id);
@@ -5083,9 +5204,13 @@ async function rejectReg(id) {
 
 async function loadParent() {
   const content = document.getElementById('parent-content');
+  const isStudent = CP.role === 'student';
+  { const t = document.getElementById('parent-title'); if (t) t.textContent = isStudent ? '🎓 مستواي' : '👨‍👦 متابعة ابني'; }
+  { const rw = document.getElementById('parent-reg-wrap'); if (rw) rw.style.display = isStudent ? 'none' : ''; }
+  renderWeeklyStrip('wv-strip-parent');
   content.innerHTML = '<div class="empty"><div class="ei">⏳</div><p>جارٍ تحميل بيانات ابنك...</p></div>';
 
-  const { data: kids } = await sb.from('students').select('*,circles(name,schedule,location,teacher_name)').eq('parent_id', CU.id);
+  const { data: kids } = await sb.from('students').select('*,circles(name,schedule,location,teacher_name)').eq(isStudent ? 'user_id' : 'parent_id', CU.id);
   if (!kids?.length) {
     content.innerHTML = `<div style="text-align:center;padding:40px 20px">
       <div style="font-size:60px;margin-bottom:16px">👦</div>
@@ -5251,15 +5376,15 @@ async function loadParent() {
     </div>
 
     <!-- أزرار ولي الأمر -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:${isStudent?'1fr':'1fr 1fr'};gap:10px;margin-bottom:16px">
       <button onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})"
         style="padding:14px;background:linear-gradient(135deg,var(--gd),#2f6767);color:white;border:none;border-radius:14px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
         🏅 بطاقة الإنجاز
       </button>
-      <button onclick="openM('m-parent-note')"
+      ${isStudent ? '' : `<button onclick="openM('m-parent-note')"
         style="padding:14px;background:linear-gradient(135deg,#14568f,#0d2040);color:white;border:none;border-radius:14px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
         ✍️ ملاحظة للمركز
-      </button>
+      </button>`}
     </div>
 
     <!-- فرسان الحلقة -->
@@ -5271,6 +5396,7 @@ async function loadParent() {
 
 // ===================== TEACHER HOME =====================
 async function loadTeacherHome() {
+  renderWeeklyStrip('wv-strip-teacher');
   const { data: circles } = await sb.from('circles').select('*').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id);
   const c = document.getElementById('teacher-content');
   if (!circles?.length) { c.innerHTML = emptyDiv('🕌','لم يتم تعيينك في حلقة بعد. تواصل مع المدير.'); return; }
