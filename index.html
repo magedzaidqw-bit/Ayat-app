@@ -2641,7 +2641,7 @@ async function onMemoStudentChange() {
 
   const tbl = type === 'muraja' ? 'review_log' : 'memorization_log';
   const { data } = await sb.from(tbl).select('surah_to,ayah_to,date')
-    .eq('student_id', sid).lte('date', today()).order('date', { ascending: false }).limit(1);
+    .eq('student_id', sid).lte('date', today()).or('mastery.is.null,mastery.neq.weak').order('date', { ascending: false }).limit(1);
   const last = data && data[0];
 
   if (!last) {
@@ -3608,7 +3608,7 @@ async function quickLoad() {
   _qk.last = { hifz: {}, muraja: {} }; _qk.sess = new Set();
   if (_qk.students.length) {
     const ids = _qk.students.map(s => s.id);
-    const get = (tbl) => fetchAllRows(() => sb.from(tbl).select('student_id,surah_to,ayah_to,date,created_at').in('student_id', ids).lte('date', today()).order('date',{ascending:false}).order('created_at',{ascending:false}));
+    const get = (tbl) => fetchAllRows(() => sb.from(tbl).select('student_id,surah_to,ayah_to,date,created_at').in('student_id', ids).lte('date', today()).or('mastery.is.null,mastery.neq.weak').order('date',{ascending:false}).order('created_at',{ascending:false}));
     try {
       const [h, m] = await Promise.all([get('memorization_log'), get('review_log')]);
       h.forEach(r => { if (!_qk.last.hifz[r.student_id]) _qk.last.hifz[r.student_id] = r; });
@@ -3656,8 +3656,8 @@ async function quickStatus() {
     try {
       const [a, h, m] = await Promise.all([
         sb.from('attendance').select('student_id,status').eq('date', date).in('student_id', ids),
-        sb.from('memorization_log').select('student_id').eq('date', date).in('student_id', ids),
-        sb.from('review_log').select('student_id').eq('date', date).in('student_id', ids)
+        sb.from('memorization_log').select('student_id').eq('date', date).in('student_id', ids).neq('mastery','weak'),
+        sb.from('review_log').select('student_id').eq('date', date).in('student_id', ids).neq('mastery','weak')
       ]);
       (a.data||[]).forEach(x => { if (x.status === 'absent' || x.status === 'excused') _qk.absent.add(x.student_id); });
       (h.data||[]).forEach(x => _qk.done.add(x.student_id));
@@ -3769,10 +3769,20 @@ async function quickSave() {
   // نبقي الشاشة مفتوحة: نُقفل بطاقات من حُفظ لهم، ونحدّث نقطتهم الأخيرة، ونُنزلهم لأسفل القائمة
   const box = document.getElementById('qk-rows'), dir = v('qk-dir') || 'asc';
   const savedIds = [...new Set([...hifz, ...mur].map(r => r.student_id))];
+  // التقدير "ضعيف" لا يُعتمد: يبقى الطالب عند نفس النقطة ولا تُقفل بطاقته
+  let weakCnt = 0;
   savedIds.forEach(sid => {
-    _qk.sess.add(sid); _qk.done.add(sid);
+    _qk.sess.add(sid);
+    let advanced = false;
     [['hifz', hifz], ['muraja', mur]].forEach(([kind, rows]) => {
-      const mine = rows.filter(r => r.student_id === sid); if (!mine.length) return;
+      const mineAll = rows.filter(r => r.student_id === sid); if (!mineAll.length) return;
+      const mine = mineAll.filter(r => r.mastery !== 'weak');
+      if (!mine.length) {
+        weakCnt++;
+        document.getElementById(`qk-${kind}-t-${sid}`).value = ''; document.getElementById(`qk-${kind}-ts-${sid}`).value = ''; quickCnt(kind, sid);
+        return;
+      }
+      advanced = true;
       const lastRow = mine[mine.length - 1];
       _qk.last[kind][sid] = { surah_to: lastRow.surah_to, ayah_to: lastRow.ayah_to, date };
       const nx = qkNext(lastRow.surah_to, lastRow.ayah_to, dir);
@@ -3780,11 +3790,12 @@ async function quickSave() {
       if (nx) { document.getElementById(`qk-${kind}-s-${sid}`).value = nx.surah; document.getElementById(`qk-${kind}-f-${sid}`).value = nx.ayah; }
       document.getElementById(`qk-${kind}-t-${sid}`).value = ''; document.getElementById(`qk-${kind}-ts-${sid}`).value = ''; quickCnt(kind, sid);
     });
+    if (advanced) _qk.done.add(sid);
     const card = document.getElementById(`qk-card-${sid}`);
-    if (card) { card.classList.add('qk-collapsed'); box.appendChild(card); }
+    if (card && advanced) { card.classList.add('qk-collapsed'); box.appendChild(card); }
   });
   quickMark();
-  const tip = document.getElementById('qk-toast'); tip.textContent = `✅ حُفظ ${savedIds.length} طالب (${hifz.length} حفظ، ${mur.length} مراجعة) — تابع مع بقية الطلاب`;
+  const tip = document.getElementById('qk-toast'); tip.textContent = `✅ حُفظ ${savedIds.length} طالب (${hifz.length} حفظ، ${mur.length} مراجعة) — تابع مع بقية الطلاب` + (weakCnt ? ` — ⚠️ ${weakCnt} تقدير "ضعيف" لم يُعتمد ويبقى الطالب عند نفس النقطة` : '');
   tip.style.display = 'block'; setTimeout(() => { tip.style.display = 'none'; }, 5000);
   loadMemo();
 }
