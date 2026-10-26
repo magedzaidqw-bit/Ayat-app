@@ -1455,7 +1455,7 @@ function buildPages() {
       <button class="btn btn-g" onclick="openEvalFor('')">+ تقييم محفظ</button>
       <button class="btn btn-o" onclick="printAllEvalCards()">🏆 التقرير الإجمالي للجروب</button>
     </div>
-    <div class="card"><div class="ch"><h3>سجل تقييمات المحفظين</h3></div><div class="cb"><div class="tw"><table id="eval-body-table"><thead><tr><th>المحفظ</th><th>الشهر</th><th>الزيارات</th><th>خطة الحفظ</th><th>توصيات المشرف</th><th>أداء الطالب</th><th>التقرير الأسبوعي</th><th>المواعيد</th><th>إدارة الحلقة</th><th>المجموع</th><th>إجراءات</th></tr></thead><tbody id="eval-body"></tbody></table></div></div></div>
+    <div class="card"><div class="ch"><h3>سجل تقييمات المحفظين</h3></div><div class="cb"><div class="tw"><table id="eval-body-table"><thead><tr><th>المحفظ</th><th>الشهر</th><th>الزيارات</th><th>خطة الحفظ</th><th>توصيات المشرف</th><th>أداء الطالب</th><th>التقرير الأسبوعي</th><th>المواعيد</th><th>إدارة الحلقة</th><th>التفاعل مع القيمة</th><th>المجموع</th><th>إجراءات</th></tr></thead><tbody id="eval-body"></tbody></table></div></div></div>
   </div>
 
   <div class="page" id="p-top3">
@@ -1837,10 +1837,10 @@ function buildModals() {
     <div class="fg"><label>المحفظ</label><select id="ev-teacher"><option value="">اختر</option></select></div>
     <div class="fgrid">
       <div class="fg"><label>شهر التقييم</label>
-        <select id="ev-month">${['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'].map((n,i)=>`<option value="${i+1}">${n}</option>`).join('')}</select>
+        <select id="ev-month" onchange="onEvPeriodChange()">${['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'].map((n,i)=>`<option value="${i+1}">${n}</option>`).join('')}</select>
       </div>
       <div class="fg"><label>السنة</label>
-        <select id="ev-year">${[2024,2025,2026,2027,2028,2029,2030].map(y=>`<option value="${y}">${y}</option>`).join('')}</select>
+        <select id="ev-year" onchange="onEvPeriodChange()">${[2024,2025,2026,2027,2028,2029,2030].map(y=>`<option value="${y}">${y}</option>`).join('')}</select>
       </div>
     </div>
 
@@ -1865,9 +1865,10 @@ function buildModals() {
         ['s3','التركيز مع أداء الطالب وتصحيح الأخطاء'],
         ['s4','إرسال التقرير الأسبوعي للطلبة'],
         ['s5','الالتزام بمواعيد الحلقة'],
-        ['s6','إدارة وتنظيم الحلقة']
+        ['s6','إدارة وتنظيم الحلقة'],
+        ['s7','التفاعل مع القيمة التربوية الشهرية']
       ].map(([name, label]) => `
-        <div style="margin-bottom:12px">
+        <div id="ev-${name}-wrap" style="margin-bottom:12px${name==='s7'?';display:none':''}">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
             <label style="font-size:13px;font-weight:600">${label}</label>
             <span id="${name}-val" style="font-size:14px;font-weight:800;color:var(--gd);min-width:30px;text-align:center">5</span>
@@ -2330,9 +2331,9 @@ async function loadTeachers() {
   const [{ data: circleTeachers }, { data: profileTeachers }, { data: evs }] = await Promise.all([
     sb.from('circles').select('teacher_name').order('teacher_name'),
     sb.from('profiles').select('*').eq('role','teacher'),
-    sb.from('teacher_evaluations').select('teacher_id,total_score')
+    sb.from('teacher_evaluations').select('teacher_id,total_score,eval_date')
   ]);
-  const avgs = {}; evs?.forEach(e=>{ if(!avgs[e.teacher_id]) avgs[e.teacher_id]=[]; avgs[e.teacher_id].push(e.total_score); });
+  const avgs = {}; evs?.forEach(e=>{ if(!avgs[e.teacher_id]) avgs[e.teacher_id]=[]; avgs[e.teacher_id].push(Math.round((e.total_score||0)*60/evMax(e.eval_date))); });
 
   // Unique teacher names from circles
   const circleNames = [...new Set((circleTeachers||[]).map(c=>c.teacher_name).filter(Boolean))];
@@ -4594,11 +4595,24 @@ function getEvDate() {
   if (!y || !m) return '';
   return `${y}-${String(m).padStart(2,'0')}-01`;
 }
+// بند «التفاعل مع القيمة التربوية الشهرية» يبدأ من تقييم شهر نوفمبر 2026
+const EV_VALUE_FROM = '2026-11-01';
+function evHasValue(date) { return !!date && String(date).slice(0,10) >= EV_VALUE_FROM; }
+function evMax(date) { return evHasValue(date) ? 70 : 60; }
+function evGrade(total, date) { const p = (total||0) / evMax(date); return p>=0.8?'ممتاز':p>=0.6?'جيد':p>=0.4?'مقبول':'ضعيف'; }
+function evColor(total, date) { const p = (total||0) / evMax(date); return p>=0.8?'#1d6b3a':p>=0.6?'#a66a0c':'#a3262b'; }
+function onEvPeriodChange() {
+  const w = document.getElementById('ev-s7-wrap');
+  if (w) w.style.display = evHasValue(getEvDate()) ? '' : 'none';
+  updateEvalTotal();
+}
 function updateEvalTotal() {
-  const vals = ['s1','s2','s3','s4','s5','s6'].map(n => parseInt(document.getElementById(n)?.value||5));
+  const d = getEvDate();
+  const ids = ['s1','s2','s3','s4','s5','s6'].concat(evHasValue(d) ? ['s7'] : []);
+  const vals = ids.map(n => parseInt(document.getElementById(n)?.value||5));
   const total = vals.reduce((a,b)=>a+b,0);
   const el = document.getElementById('eval-total-display');
-  if (el) el.textContent = `${total}/60`;
+  if (el) el.textContent = `${total}/${evMax(d)}`;
 }
 
 async function loadEvals() {
@@ -4620,13 +4634,14 @@ async function loadEvals() {
     <td>${e.student_errors||'—'}/10</td>
     <td>${e.circle_appearance||'—'}/10</td>
     <td>${e.parent_communication||'—'}/10</td>
-    <td><strong style="color:${e.total_score>=48?'#1d6b3a':e.total_score>=36?'#a66a0c':'#a3262b'}">${e.total_score}/60</strong></td>
+    <td>${e.value_engagement!=null?e.value_engagement+'/10':'—'}</td>
+    <td><strong style="color:${evColor(e.total_score,e.eval_date)}">${e.total_score}/${evMax(e.eval_date)}</strong></td>
     <td style="white-space:nowrap">
       <button class="btn btn-g btn-sm" onclick="printEvalCard('${e.id}')">🖨️ بطاقة</button>
       <button class="btn btn-gold btn-sm" onclick="sendWA('${esc(e.teacher?.full_name||'')}','${e.total_score}','${e.eval_date}','${esc(e.notes||'')}')">📱</button>
-      <button class="btn btn-o btn-sm" onclick="editEval('${e.id}','${e.teacher_id}','${e.eval_date}',${e.memorization_plan||5},${e.review_plan||5},${e.circle_record||5},${e.student_errors||5},${e.circle_appearance||5},${e.parent_communication||5},'${esc(e.notes||'')}',${e.visits||1})">✏️</button>
+      <button class="btn btn-o btn-sm" onclick="editEval('${e.id}','${e.teacher_id}','${e.eval_date}',${e.memorization_plan||5},${e.review_plan||5},${e.circle_record||5},${e.student_errors||5},${e.circle_appearance||5},${e.parent_communication||5},'${esc(e.notes||'')}',${e.visits||1},${e.value_engagement||5})">✏️</button>
       <button class="btn btn-r btn-sm" onclick="delEval('${e.id}')">حذف</button>
-    </td></tr>`).join('') : emptyRow(11,'لا توجد تقييمات');
+    </td></tr>`).join('') : emptyRow(12,'لا توجد تقييمات');
 }
 async function delEval(id) { if(!confirm('حذف هذا التقييم؟'))return; await sb.from('teacher_evaluations').delete().eq('id',id); loadEvals(); }
 async function openEvalFor(id) {
@@ -4643,15 +4658,15 @@ async function openEvalFor(id) {
     setEvPeriod(ymdLocal(pm));
   }
   document.getElementById('ev-notes').value = '';
-  ['s1','s2','s3','s4','s5','s6'].forEach(n => {
+  ['s1','s2','s3','s4','s5','s6','s7'].forEach(n => {
     const el = document.getElementById(n); if (el) el.value = 5;
     const vEl = document.getElementById(n+'-val'); if (vEl) vEl.textContent = 5;
   });
   const two = document.querySelector('input[name="ev-visits"][value="2"]'); if (two) two.checked = true;
-  updateEvalTotal();
+  onEvPeriodChange();
 }
 let editingEvalId = null;
-async function editEval(id,teacherId,date,m1,m2,m3,m4,m5,m6,notes,visits=1) {
+async function editEval(id,teacherId,date,m1,m2,m3,m4,m5,m6,notes,visits=1,m7=5) {
   editingEvalId=id;
   document.querySelector('#m-eval .mh h3').textContent='تعديل التقييم';
   document.querySelector('#m-eval .btn-pri').textContent='حفظ التعديل';
@@ -4660,14 +4675,14 @@ async function editEval(id,teacherId,date,m1,m2,m3,m4,m5,m6,notes,visits=1) {
   document.getElementById('ev-teacher').value=teacherId;
   setEvPeriod(date);
   document.getElementById('ev-notes').value=notes||'';
-  ['s1','s2','s3','s4','s5','s6'].forEach((n,i)=>{
+  ['s1','s2','s3','s4','s5','s6','s7'].forEach((n,i)=>{
     const el=document.getElementById(n);
-    const vals=[m1,m2,m3,m4,m5,m6];
+    const vals=[m1,m2,m3,m4,m5,m6,m7];
     if(el){el.value=vals[i];const vEl=document.getElementById(n+'-val');if(vEl)vEl.textContent=vals[i];}
   });
   const visitEl=document.querySelector(`input[name="ev-visits"][value="${visits}"]`);
   if(visitEl)visitEl.checked=true;
-  updateEvalTotal();
+  onEvPeriodChange();
 }
 async function saveEval() {
   const tid=v('ev-teacher'),date=getEvDate();
@@ -4689,8 +4704,9 @@ async function saveEval() {
   const m4=parseInt(document.getElementById('s4')?.value||5);
   const m5=parseInt(document.getElementById('s5')?.value||5);
   const m6=parseInt(document.getElementById('s6')?.value||5);
-  const total=m1+m2+m3+m4+m5+m6;
-  const payload={teacher_id:tid,evaluator_id:CU.id,eval_date:date,visits,memorization_plan:m1,review_plan:m2,circle_record:m3,student_errors:m4,circle_appearance:m5,parent_communication:m6,total_score:total,notes:v('ev-notes')};
+  const m7=evHasValue(date)?parseInt(document.getElementById('s7')?.value||5):null;
+  const total=m1+m2+m3+m4+m5+m6+(m7||0);
+  const payload={value_engagement:m7,teacher_id:tid,evaluator_id:CU.id,eval_date:date,visits,memorization_plan:m1,review_plan:m2,circle_record:m3,student_errors:m4,circle_appearance:m5,parent_communication:m6,total_score:total,notes:v('ev-notes')};
   if(editingEvalId){
     await sb.from('teacher_evaluations').update(payload).eq('id',editingEvalId);
     editingEvalId=null;
@@ -4715,9 +4731,9 @@ function sendWA(name, score, evalDate, notes) {
     const m = parseInt(parts[1]);
     monthName = MONTHS_AR_WA[m] || evalDate;
   }
-  const grade = score>=48?'ممتاز':score>=36?'جيد':score>=24?'مقبول':'ضعيف';
+  const grade = evGrade(score, evalDate);
   const notesLine = notes ? `\n\n📝 ملاحظات وتوصيات المشرف:\n${notes}` : '';
-  const msg = `السلام عليكم ورحمة الله\nالشيخ ${name}\n\nتقييمك الشهري (شهر ${monthName}): *${score}/60* — ${grade}${notesLine}\n\nبارك الله في جهودكم في خدمة كتاب الله 🌟`;
+  const msg = `السلام عليكم ورحمة الله\nالشيخ ${name}\n\nتقييمك الشهري (شهر ${monthName}): *${score}/${evMax(evalDate)}* — ${grade}${notesLine}\n\nبارك الله في جهودكم في خدمة كتاب الله 🌟`;
   window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
 }
 
@@ -4736,9 +4752,10 @@ async function printEvalCard(evalId) {
     ['الالتزام بمواعيد الحلقة', evals.circle_appearance],
     ['إدارة وتنظيم الحلقة', evals.parent_communication],
   ];
+  if (evHasValue(evals.eval_date)) criteria.push(['التفاعل مع القيمة التربوية الشهرية', evals.value_engagement]);
   const total = evals.total_score || 0;
-  const totalColor = total>=48?'#1d6b3a':total>=36?'#a66a0c':'#a3262b';
-  const grade = total>=48?'ممتاز':total>=36?'جيد':total>=24?'مقبول':'ضعيف';
+  const totalColor = evColor(total, evals.eval_date);
+  const grade = evGrade(total, evals.eval_date);
 
   document.getElementById('print-title').textContent = `بطاقة تقييم المحفظ — جمعية آيات الخيرية`;
   document.getElementById('print-date').textContent = `تقييم شهر: ${evMonthLabel(evals.eval_date)}`;
@@ -4750,7 +4767,7 @@ async function printEvalCard(evalId) {
           <div style="font-size:12px;color:#555;margin-top:4px">عدد الزيارات: ${evals.visits===2?'زيارتان':'زيارة واحدة'}</div>
         </div>
         <div style="text-align:center;background:${totalColor};color:white;border-radius:12px;padding:12px 20px">
-          <div style="font-size:28px;font-weight:900">${total}/60</div>
+          <div style="font-size:28px;font-weight:900">${total}/${evMax(evals.eval_date)}</div>
           <div style="font-size:13px;font-weight:700">${grade}</div>
         </div>
       </div>
@@ -4795,7 +4812,7 @@ async function printAllEvalCards() {
   // أحدث تقييم لكل محفظ فقط
   const latest = {};
   data.forEach(e => { if (!latest[e.teacher_id]) latest[e.teacher_id] = e; });
-  const sorted = Object.values(latest).sort((a,b)=>b.total_score-a.total_score);
+  const sorted = Object.values(latest).sort((a,b)=>(b.total_score/evMax(b.eval_date))-(a.total_score/evMax(a.eval_date)));
 
   document.getElementById('print-title').textContent = `التقرير الإجمالي لتقييم المحفظين — جمعية آيات الخيرية`;
   document.getElementById('print-date').textContent = `تاريخ التقرير: ${new Date().toLocaleDateString('ar-KW')}`;
@@ -4811,6 +4828,7 @@ async function printAllEvalCards() {
           <th style="padding:10px;text-align:center;font-size:12px">التقرير الأسبوعي</th>
           <th style="padding:10px;text-align:center;font-size:12px">المواعيد</th>
           <th style="padding:10px;text-align:center;font-size:12px">إدارة الحلقة</th>
+          <th style="padding:10px;text-align:center;font-size:12px">القيمة التربوية</th>
           <th style="padding:10px;text-align:center;font-size:14px;font-weight:900">المجموع</th>
           <th style="padding:10px;text-align:center;font-size:12px">التقدير</th>
         </tr>
@@ -4818,8 +4836,8 @@ async function printAllEvalCards() {
       <tbody>
         ${sorted.map((e,i) => {
           const total = e.total_score||0;
-          const color = total>=48?'#1d6b3a':total>=36?'#a66a0c':'#a3262b';
-          const grade = total>=48?'ممتاز':total>=36?'جيد':total>=24?'مقبول':'ضعيف';
+          const color = evColor(total, e.eval_date);
+          const grade = evGrade(total, e.eval_date);
           const medal = i<3 ? svgMedal(i,24) : '';
           return `<tr style="background:${i%2===0?'#f5f5f5':'white'}">
             <td style="padding:10px;font-size:14px;font-weight:900;text-align:center">${medal} ${i+1}</td>
@@ -4830,7 +4848,8 @@ async function printAllEvalCards() {
             <td style="padding:10px;text-align:center;font-size:13px">${e.student_errors||0}/10</td>
             <td style="padding:10px;text-align:center;font-size:13px">${e.circle_appearance||0}/10</td>
             <td style="padding:10px;text-align:center;font-size:13px">${e.parent_communication||0}/10</td>
-            <td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:${color};white-space:nowrap">${total}/60</td>
+            <td style="padding:10px;text-align:center;font-size:13px">${e.value_engagement!=null?e.value_engagement+'/10':'—'}</td>
+            <td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:${color};white-space:nowrap">${total}/${evMax(e.eval_date)}</td>
             <td style="padding:10px;text-align:center;font-size:12px;font-weight:700;color:${color}">${grade}</td>
           </tr>`;
         }).join('')}
