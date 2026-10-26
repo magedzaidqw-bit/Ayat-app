@@ -1157,8 +1157,8 @@ async function checkMonthlyReportReminder() {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
   const remainingDays = daysInMonth - day;
 
-  // نتحقق يومياً (آخر 5 أيام من الشهر)
-  if (remainingDays > 5) return;
+  // يظهر التنبيه من يوم 27 من كل شهر حتى نهايته، أو حتى يرفع المحفظ تقريره
+  if (day < 27) return;
 
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
