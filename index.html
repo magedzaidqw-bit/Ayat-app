@@ -1455,7 +1455,7 @@ function buildPages() {
       <button class="btn btn-g" onclick="openEvalFor('')">+ تقييم محفظ</button>
       <button class="btn btn-o" onclick="printAllEvalCards()">🏆 التقرير الإجمالي للجروب</button>
     </div>
-    <div class="card"><div class="ch"><h3>سجل تقييمات المحفظين</h3></div><div class="cb"><div class="tw"><table id="eval-body-table"><thead><tr><th>المحفظ</th><th>الشهر</th><th>الزيارات</th><th>خطة الحفظ</th><th>توصيات المشرف</th><th>أداء الطالب</th><th>التقرير الأسبوعي</th><th>المواعيد</th><th>إدارة الحلقة</th><th>التفاعل مع القيمة</th><th>المجموع</th><th>إجراءات</th></tr></thead><tbody id="eval-body"></tbody></table></div></div></div>
+    <div class="card"><div class="ch"><h3>سجل تقييمات المحفظين</h3></div><div class="cb"><div class="tw"><table id="eval-body-table"><thead><tr><th>المحفظ</th><th>الشهر</th><th>الزيارات</th><th>خطة الحفظ</th><th>توصيات المشرف</th><th>أداء الطالب</th><th>التقرير الأسبوعي</th><th>المواعيد</th><th>إدارة الحلقة</th><th>التفاعل مع القيمة</th><th>تحفيز الفرسان</th><th>المجموع</th><th>إجراءات</th></tr></thead><tbody id="eval-body"></tbody></table></div></div></div>
   </div>
 
   <div class="page" id="p-top3">
@@ -1866,9 +1866,10 @@ function buildModals() {
         ['s4','إرسال التقرير الأسبوعي للطلبة'],
         ['s5','الالتزام بمواعيد الحلقة'],
         ['s6','إدارة وتنظيم الحلقة'],
-        ['s7','التفاعل مع القيمة التربوية الشهرية']
+        ['s7','التفاعل مع القيمة التربوية الشهرية'],
+        ['s8','تحفيز الطلبة من خلال تفعيل فرسان الحلقة']
       ].map(([name, label]) => `
-        <div id="ev-${name}-wrap" style="margin-bottom:12px${name==='s7'?';display:none':''}">
+        <div id="ev-${name}-wrap" style="margin-bottom:12px${(name==='s7'||name==='s8')?';display:none':''}">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
             <label style="font-size:13px;font-weight:600">${label}</label>
             <span id="${name}-val" style="font-size:14px;font-weight:800;color:var(--gd);min-width:30px;text-align:center">5</span>
@@ -4595,20 +4596,19 @@ function getEvDate() {
   if (!y || !m) return '';
   return `${y}-${String(m).padStart(2,'0')}-01`;
 }
-// بند «التفاعل مع القيمة التربوية الشهرية» يبدأ من تقييم شهر نوفمبر 2026
+// بندان جديدان (التفاعل مع القيمة التربوية + تحفيز الطلبة بالفرسان) يبدأان من تقييم شهر نوفمبر 2026
 const EV_VALUE_FROM = '2026-11-01';
 function evHasValue(date) { return !!date && String(date).slice(0,10) >= EV_VALUE_FROM; }
-function evMax(date) { return evHasValue(date) ? 70 : 60; }
+function evMax(date) { return evHasValue(date) ? 80 : 60; }
 function evGrade(total, date) { const p = (total||0) / evMax(date); return p>=0.8?'ممتاز':p>=0.6?'جيد':p>=0.4?'مقبول':'ضعيف'; }
 function evColor(total, date) { const p = (total||0) / evMax(date); return p>=0.8?'#1d6b3a':p>=0.6?'#a66a0c':'#a3262b'; }
 function onEvPeriodChange() {
-  const w = document.getElementById('ev-s7-wrap');
-  if (w) w.style.display = evHasValue(getEvDate()) ? '' : 'none';
+  ['ev-s7-wrap','ev-s8-wrap'].forEach(id => { const w = document.getElementById(id); if (w) w.style.display = evHasValue(getEvDate()) ? '' : 'none'; });
   updateEvalTotal();
 }
 function updateEvalTotal() {
   const d = getEvDate();
-  const ids = ['s1','s2','s3','s4','s5','s6'].concat(evHasValue(d) ? ['s7'] : []);
+  const ids = ['s1','s2','s3','s4','s5','s6'].concat(evHasValue(d) ? ['s7','s8'] : []);
   const vals = ids.map(n => parseInt(document.getElementById(n)?.value||5));
   const total = vals.reduce((a,b)=>a+b,0);
   const el = document.getElementById('eval-total-display');
@@ -4635,13 +4635,14 @@ async function loadEvals() {
     <td>${e.circle_appearance||'—'}/10</td>
     <td>${e.parent_communication||'—'}/10</td>
     <td>${e.value_engagement!=null?e.value_engagement+'/10':'—'}</td>
+    <td>${e.heroes_motivation!=null?e.heroes_motivation+'/10':'—'}</td>
     <td><strong style="color:${evColor(e.total_score,e.eval_date)}">${e.total_score}/${evMax(e.eval_date)}</strong></td>
     <td style="white-space:nowrap">
       <button class="btn btn-g btn-sm" onclick="printEvalCard('${e.id}')">🖨️ بطاقة</button>
       <button class="btn btn-gold btn-sm" onclick="sendWA('${esc(e.teacher?.full_name||'')}','${e.total_score}','${e.eval_date}','${esc(e.notes||'')}')">📱</button>
-      <button class="btn btn-o btn-sm" onclick="editEval('${e.id}','${e.teacher_id}','${e.eval_date}',${e.memorization_plan||5},${e.review_plan||5},${e.circle_record||5},${e.student_errors||5},${e.circle_appearance||5},${e.parent_communication||5},'${esc(e.notes||'')}',${e.visits||1},${e.value_engagement||5})">✏️</button>
+      <button class="btn btn-o btn-sm" onclick="editEval('${e.id}','${e.teacher_id}','${e.eval_date}',${e.memorization_plan||5},${e.review_plan||5},${e.circle_record||5},${e.student_errors||5},${e.circle_appearance||5},${e.parent_communication||5},'${esc(e.notes||'')}',${e.visits||1},${e.value_engagement||5},${e.heroes_motivation||5})">✏️</button>
       <button class="btn btn-r btn-sm" onclick="delEval('${e.id}')">حذف</button>
-    </td></tr>`).join('') : emptyRow(12,'لا توجد تقييمات');
+    </td></tr>`).join('') : emptyRow(13,'لا توجد تقييمات');
 }
 async function delEval(id) { if(!confirm('حذف هذا التقييم؟'))return; await sb.from('teacher_evaluations').delete().eq('id',id); loadEvals(); }
 async function openEvalFor(id) {
@@ -4658,7 +4659,7 @@ async function openEvalFor(id) {
     setEvPeriod(ymdLocal(pm));
   }
   document.getElementById('ev-notes').value = '';
-  ['s1','s2','s3','s4','s5','s6','s7'].forEach(n => {
+  ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(n => {
     const el = document.getElementById(n); if (el) el.value = 5;
     const vEl = document.getElementById(n+'-val'); if (vEl) vEl.textContent = 5;
   });
@@ -4666,7 +4667,7 @@ async function openEvalFor(id) {
   onEvPeriodChange();
 }
 let editingEvalId = null;
-async function editEval(id,teacherId,date,m1,m2,m3,m4,m5,m6,notes,visits=1,m7=5) {
+async function editEval(id,teacherId,date,m1,m2,m3,m4,m5,m6,notes,visits=1,m7=5,m8=5) {
   editingEvalId=id;
   document.querySelector('#m-eval .mh h3').textContent='تعديل التقييم';
   document.querySelector('#m-eval .btn-pri').textContent='حفظ التعديل';
@@ -4675,9 +4676,9 @@ async function editEval(id,teacherId,date,m1,m2,m3,m4,m5,m6,notes,visits=1,m7=5)
   document.getElementById('ev-teacher').value=teacherId;
   setEvPeriod(date);
   document.getElementById('ev-notes').value=notes||'';
-  ['s1','s2','s3','s4','s5','s6','s7'].forEach((n,i)=>{
+  ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach((n,i)=>{
     const el=document.getElementById(n);
-    const vals=[m1,m2,m3,m4,m5,m6,m7];
+    const vals=[m1,m2,m3,m4,m5,m6,m7,m8];
     if(el){el.value=vals[i];const vEl=document.getElementById(n+'-val');if(vEl)vEl.textContent=vals[i];}
   });
   const visitEl=document.querySelector(`input[name="ev-visits"][value="${visits}"]`);
@@ -4705,8 +4706,9 @@ async function saveEval() {
   const m5=parseInt(document.getElementById('s5')?.value||5);
   const m6=parseInt(document.getElementById('s6')?.value||5);
   const m7=evHasValue(date)?parseInt(document.getElementById('s7')?.value||5):null;
-  const total=m1+m2+m3+m4+m5+m6+(m7||0);
-  const payload={value_engagement:m7,teacher_id:tid,evaluator_id:CU.id,eval_date:date,visits,memorization_plan:m1,review_plan:m2,circle_record:m3,student_errors:m4,circle_appearance:m5,parent_communication:m6,total_score:total,notes:v('ev-notes')};
+  const m8=evHasValue(date)?parseInt(document.getElementById('s8')?.value||5):null;
+  const total=m1+m2+m3+m4+m5+m6+(m7||0)+(m8||0);
+  const payload={value_engagement:m7,heroes_motivation:m8,teacher_id:tid,evaluator_id:CU.id,eval_date:date,visits,memorization_plan:m1,review_plan:m2,circle_record:m3,student_errors:m4,circle_appearance:m5,parent_communication:m6,total_score:total,notes:v('ev-notes')};
   if(editingEvalId){
     await sb.from('teacher_evaluations').update(payload).eq('id',editingEvalId);
     editingEvalId=null;
@@ -4752,7 +4754,7 @@ async function printEvalCard(evalId) {
     ['الالتزام بمواعيد الحلقة', evals.circle_appearance],
     ['إدارة وتنظيم الحلقة', evals.parent_communication],
   ];
-  if (evHasValue(evals.eval_date)) criteria.push(['التفاعل مع القيمة التربوية الشهرية', evals.value_engagement]);
+  if (evHasValue(evals.eval_date)) { criteria.push(['التفاعل مع القيمة التربوية الشهرية', evals.value_engagement]); criteria.push(['تحفيز الطلبة من خلال تفعيل فرسان الحلقة', evals.heroes_motivation]); }
   const total = evals.total_score || 0;
   const totalColor = evColor(total, evals.eval_date);
   const grade = evGrade(total, evals.eval_date);
@@ -4829,6 +4831,7 @@ async function printAllEvalCards() {
           <th style="padding:10px;text-align:center;font-size:12px">المواعيد</th>
           <th style="padding:10px;text-align:center;font-size:12px">إدارة الحلقة</th>
           <th style="padding:10px;text-align:center;font-size:12px">القيمة التربوية</th>
+          <th style="padding:10px;text-align:center;font-size:12px">تحفيز الفرسان</th>
           <th style="padding:10px;text-align:center;font-size:14px;font-weight:900">المجموع</th>
           <th style="padding:10px;text-align:center;font-size:12px">التقدير</th>
         </tr>
@@ -4849,6 +4852,7 @@ async function printAllEvalCards() {
             <td style="padding:10px;text-align:center;font-size:13px">${e.circle_appearance||0}/10</td>
             <td style="padding:10px;text-align:center;font-size:13px">${e.parent_communication||0}/10</td>
             <td style="padding:10px;text-align:center;font-size:13px">${e.value_engagement!=null?e.value_engagement+'/10':'—'}</td>
+            <td style="padding:10px;text-align:center;font-size:13px">${e.heroes_motivation!=null?e.heroes_motivation+'/10':'—'}</td>
             <td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:${color};white-space:nowrap">${total}/${evMax(e.eval_date)}</td>
             <td style="padding:10px;text-align:center;font-size:12px;font-weight:700;color:${color}">${grade}</td>
           </tr>`;
