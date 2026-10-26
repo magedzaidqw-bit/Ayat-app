@@ -7439,6 +7439,14 @@ function showReportModal(r) {
   window.addEventListener('appinstalled', function(){ document.getElementById('install-banner').style.display = 'none'; });
   var ua = navigator.userAgent || '';
   var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // احتياط: إن لم يُطلق المتصفح حدث التثبيت خلال ثوانٍ (أندرويد) نعرض الطريقة اليدوية بدل أن لا يظهر شيء
+  if (/Android/i.test(ua) && !standalone()) {
+    setTimeout(function(){
+      if (dp) return;
+      document.getElementById('install-text').innerHTML = 'من قائمة المتصفح <strong>⋮</strong> اختر <strong>«تثبيت التطبيق»</strong> أو «إضافة إلى الشاشة الرئيسية»';
+      show();
+    }, 4000);
+  }
   if (isIOS && !standalone()) {
     document.getElementById('install-text').innerHTML = 'اضغط زر المشاركة <span style="font-size:15px">⎙</span> في المتصفح، ثم اختر <strong>«إضافة إلى الشاشة الرئيسية»</strong>';
     setTimeout(show, 2500);
