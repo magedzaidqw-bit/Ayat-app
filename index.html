@@ -7408,5 +7408,43 @@ function showReportModal(r) {
   <div class="print-footer">آيات تُتلى، وأجيالٌ تُبنى</div>
 </div>
 
+
+<!-- INSTALL BANNER -->
+<div id="install-banner" style="display:none;position:fixed;left:12px;right:12px;bottom:12px;z-index:1100;background:#fff;border:1.5px solid var(--gold);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:12px 14px;font-family:'Cairo',sans-serif;direction:rtl">
+  <div style="display:flex;align-items:center;gap:10px">
+    <img src="ayat-logo-192.png" alt="" style="width:40px;height:40px;border-radius:10px" onerror="this.style.display='none'">
+    <div style="flex:1;font-size:13px;color:var(--gd);line-height:1.7"><strong>ثبّت تطبيق آيات</strong>
+      <div id="install-text" style="font-size:12px;color:var(--mid)">افتحه بنقرة من شاشة جوالك مباشرة</div></div>
+    <button id="install-btn" class="btn btn-g btn-sm" style="display:none" onclick="doInstall()">تثبيت</button>
+    <button onclick="dismissInstall()" style="background:none;border:none;font-size:18px;color:var(--mid);cursor:pointer" aria-label="إغلاق">✕</button>
+  </div>
+</div>
+<script>
+(function(){
+  var dp = null, KEY = 'ayat_install_dismissed';
+  function standalone(){ try { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; } catch(e){ return false; } }
+  function dismissedRecently(){ try { var t = parseInt(localStorage.getItem(KEY)||'0',10); return t && (Date.now()-t) < 7*24*3600*1000; } catch(e){ return false; } }
+  function show(){ if (standalone() || dismissedRecently()) return; document.getElementById('install-banner').style.display = 'block'; }
+  window.dismissInstall = function(){ document.getElementById('install-banner').style.display = 'none'; try { localStorage.setItem(KEY, String(Date.now())); } catch(e){} };
+  window.doInstall = async function(){
+    if (!dp) return;
+    dp.prompt();
+    try { await dp.userChoice; } catch(e){}
+    dp = null; document.getElementById('install-banner').style.display = 'none';
+  };
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault(); dp = e;
+    document.getElementById('install-btn').style.display = 'inline-block';
+    show();
+  });
+  window.addEventListener('appinstalled', function(){ document.getElementById('install-banner').style.display = 'none'; });
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS && !standalone()) {
+    document.getElementById('install-text').innerHTML = 'اضغط زر المشاركة <span style="font-size:15px">⎙</span> في المتصفح، ثم اختر <strong>«إضافة إلى الشاشة الرئيسية»</strong>';
+    setTimeout(show, 2500);
+  }
+})();
+</script>
 </body>
 </html>
