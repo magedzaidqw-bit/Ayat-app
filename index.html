@@ -1883,6 +1883,7 @@ function buildModals() {
         </div>`).join('')}
     </div>
 
+    <div id="ev-new-note" style="font-size:12px;color:#8a6d12;background:#fff8e1;border:1px dashed #e3c36a;border-radius:10px;padding:8px 12px;margin-bottom:12px">🆕 ابتداءً من تقييم شهر نوفمبر 2026 يُضاف بندان: «التفاعل مع القيمة التربوية الشهرية» و«تحفيز الطلبة من خلال تفعيل فرسان الحلقة» (المجموع من 80).</div>
     <div class="fg"><label>ملاحظات وتوصيات</label><textarea id="ev-notes" rows="3" placeholder="أدخل ملاحظاتك وتوصياتك للمحفظ..."></textarea></div>
     <button class="btn-pri" onclick="saveEval()">حفظ التقييم</button>
   </div></div></div>
@@ -4602,8 +4603,22 @@ function evHasValue(date) { return !!date && String(date).slice(0,10) >= EV_VALU
 function evMax(date) { return evHasValue(date) ? 80 : 60; }
 function evGrade(total, date) { const p = (total||0) / evMax(date); return p>=0.8?'ممتاز':p>=0.6?'جيد':p>=0.4?'مقبول':'ضعيف'; }
 function evColor(total, date) { const p = (total||0) / evMax(date); return p>=0.8?'#1d6b3a':p>=0.6?'#a66a0c':'#a3262b'; }
+// إعلان للمشرفين بالبندين الجديدين قبل تفعيلهما (يظهر حتى نهاية ديسمبر 2026)
+function evNewItemsNoticeHtml() {
+  const today = new Date().toISOString().slice(0,10);
+  if (today > '2026-12-31') return '';
+  const active = today >= EV_VALUE_FROM;
+  return `<div style="background:linear-gradient(135deg,#fff8e1,#fdf1d9);border:1.5px solid #e3c36a;border-right:5px solid #c9a227;border-radius:14px;padding:14px 16px;margin-bottom:14px;color:#5a4410;line-height:1.9">
+    <div style="font-weight:900;font-size:14px;margin-bottom:4px">🆕 ${active ? 'بندان جديدان في تقييم المحفظين' : 'تنبيه: بندان جديدان في تقييم المحفظين من الشهر القادم'}</div>
+    <div style="font-size:13px">يُضاف ابتداءً من تقييم <strong>شهر نوفمبر 2026</strong>:<br>
+    ١- <strong>التفاعل مع القيمة التربوية الشهرية</strong><br>
+    ٢- <strong>تحفيز الطلبة من خلال تفعيل فرسان الحلقة</strong><br>
+    ويصبح المجموع من <strong>80</strong> بدل 60. ${active ? '' : 'أما تقييم هذا الشهر (أكتوبر) فيبقى كما هو بدون البندين.'}</div>
+  </div>`;
+}
 function onEvPeriodChange() {
   ['ev-s7-wrap','ev-s8-wrap'].forEach(id => { const w = document.getElementById(id); if (w) w.style.display = evHasValue(getEvDate()) ? '' : 'none'; });
+  const nn = document.getElementById('ev-new-note'); if (nn) nn.style.display = evHasValue(getEvDate()) ? 'none' : '';
   updateEvalTotal();
 }
 function updateEvalTotal() {
@@ -4616,7 +4631,7 @@ function updateEvalTotal() {
 }
 
 async function loadEvals() {
-  const _n = document.getElementById('eval-notice'); if (_n) _n.innerHTML = periodNoticeHtml();
+  const _n = document.getElementById('eval-notice'); if (_n) _n.innerHTML = periodNoticeHtml() + evNewItemsNoticeHtml();
   let q = sb.from('teacher_evaluations').select('*,teacher:profiles!teacher_evaluations_teacher_id_fkey(full_name)').order('eval_date',{ascending:false});
   if (CP.role === 'supervisor') q = q.eq('evaluator_id', CU.id);
   const { data } = await q;
