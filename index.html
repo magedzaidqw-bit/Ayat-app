@@ -1023,11 +1023,10 @@ document.addEventListener('click', function(e) {
   menu.classList.remove('open');
 });
 
-// إلغاء Service Worker نهائياً لمنع مشاكل الكاش
+// خدمة عمل خفيفة بلا تخزين (شرط ظهور زر "تثبيت التطبيق") — لا تسبب نسخاً قديمة
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(r => r.unregister());
-
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('pwa-sw.js').catch(() => {});
   });
 }
 </script>
