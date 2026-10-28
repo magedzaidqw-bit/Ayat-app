@@ -4448,7 +4448,8 @@ async function loadActivity() {
       return { t, circ, a, level, W, students: stuCount[t.id] || 0, newS: newStu[t.id] || 0, sent: sentByTeacher[t.id] || 0, elig: eligibleByTeacher[t.id] || 0, mr: mrBy[t.id] || null, mrAt: mrAt[t.id] || null };
     }).filter(r => r.circ.length);
     const order = { bad:0, mid:1, ok:2, none:3, leave:3, off:3 };
-    rows.sort((x, y) => order[x.level] - order[y.level] || (x.t.full_name || '').localeCompare(y.t.full_name || '', 'ar'));
+    const mrRank = r => r.mr === 'submitted' ? 0 : r.mr ? 1 : 2;
+    rows.sort((x, y) => order[x.level] - order[y.level] || mrRank(x) - mrRank(y) || (x.t.full_name || '').localeCompare(y.t.full_name || '', 'ar'));
 
     // المشرفون
     const supRows = sups.map(s => {
@@ -4624,9 +4625,9 @@ async function loadActivity() {
           <div class="sc" style="flex:1;min-width:110px;border-color:#a3262b"><div><div class="sn" style="color:${day < 25 ? '#7a7a7a' : '#a3262b'}">${noneR.length}</div><div class="sl">${day < 25 ? '⏳' : '❌'} لم يُرسلوا</div></div></div>
         </div>
         <div style="line-height:2;font-size:13px">
-          <div><strong style="color:${day < 25 ? '#7a7a7a' : '#a3262b'}">لم يُرسلوا — لا يوجد لهم تقرير (${noneR.length}):</strong> ${names(noneR)}</div>
-          <div><strong style="color:#c9962e">مسودة — لم يضغطوا إرسال (${draftR.length}):</strong> ${names(draftR)}</div>
-          <div><strong style="color:#1d6b3a">أرسلوا (${sentR.length}):</strong> ${sentR.length ? sentR.map(r => escapeHtml(r.t.full_name) + (when(r) ? ' <span style="color:var(--mid);font-size:11px">(' + when(r) + ')</span>' : '')).join('، ') : '—'}</div>
+          <div><strong style="color:#1d6b3a">✅ أرسلوا (${sentR.length}):</strong> ${sentR.length ? sentR.map(r => escapeHtml(r.t.full_name) + (when(r) ? ' <span style="color:var(--mid);font-size:11px">(' + when(r) + ')</span>' : '')).join('، ') : '—'}</div>
+          <div><strong style="color:#c9962e">📝 مسودة — لم يضغطوا إرسال (${draftR.length}):</strong> ${names(draftR)}</div>
+          <div><strong style="color:${day < 25 ? '#7a7a7a' : '#a3262b'}">${day < 25 ? '⏳' : '❌'} لم يُرسلوا — لا يوجد لهم تقرير (${noneR.length}):</strong> ${names(noneR)}</div>
         </div></div></div>`;
     }
 
@@ -4638,9 +4639,22 @@ async function loadActivity() {
       if (!wkWeeks.length) {
         html += `<div style="color:var(--mid);padding:8px">لم يبدأ أول أسبوع من ${monthName} بعد (تبدأ الأسابيع يوم الأحد).</div>`;
       } else {
+        { const lw = wkWeeks[wkWeeks.length - 1];
+          const rk = r => { const n = ((wkSent[r.t.id] || {})[lw.key]) || 0; const Dl = (lw.key >= fromStr) ? ((wkPresent[r.t.id] || {})[lw.key]?.size || 0) : (r.students || 0); return Dl === 0 && n === 0 ? 3 : (Dl > 0 && n >= Dl) ? 0 : n > 0 ? 1 : 2; };
+          const c = [0, 0, 0, 0]; rows.forEach(r => c[rk(r)]++);
+          html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;font-weight:700"><span class="badge badge-green">✔ أرسلوا للجميع: ${c[0]}</span><span class="badge badge-yellow">⚠️ أرسلوا لبعض الطلاب: ${c[1]}</span><span class="badge badge-red">❌ لم يرسلوا: ${c[2]}</span>${c[3] ? `<span class="badge bg">— لا حضور: ${c[3]}</span>` : ''}<span style="color:var(--mid);font-weight:600">(الأسبوع الأخير: ${lw.label})</span></div>`; }
         html += `<div class="tw"><table><thead><tr><th>المحفظ</th>${wkWeeks.map((w, i) => `<th style="text-align:center">الأسبوع ${i + 1}<div style="font-size:11px;font-weight:600">من ${w.label}</div></th>`).join('')}</tr></thead><tbody>`;
         const sentCount = wkWeeks.map(() => 0);
-        rows.forEach(r => {
+        // من أرسل (أخضر) أولاً، ثم من أرسل لبعض الطلاب (برتقالي)، ثم من لم يُرسل — حسب أحدث أسبوع
+        const lastW = wkWeeks[wkWeeks.length - 1];
+        const stRank = r => {
+          const n = ((wkSent[r.t.id] || {})[lastW.key]) || 0;
+          const Dl = (lastW.key >= fromStr) ? ((wkPresent[r.t.id] || {})[lastW.key]?.size || 0) : (r.students || 0);
+          return Dl === 0 && n === 0 ? 3 : (Dl > 0 && n >= Dl) ? 0 : n > 0 ? 1 : 2;
+        };
+        const wkRows = [...rows].sort((a, b) => stRank(a) - stRank(b) || (a.t.full_name || '').localeCompare(b.t.full_name || '', 'ar'));
+        const rc = [0, 0, 0, 0]; rows.forEach(r => rc[stRank(r)]++);
+        wkRows.forEach(r => {
           html += `<tr><td><strong>${escapeHtml(r.t.full_name)}</strong></td>`;
           wkWeeks.forEach((w, i) => {
             const n = ((wkSent[r.t.id] || {})[w.key]) || 0, N = r.students || 0;
