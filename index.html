@@ -4327,6 +4327,21 @@ async function fetchAllRows(makeQuery) {
   }
   return out;
 }
+async function addTeacherLeave() {
+  const t = document.getElementById('lv-teacher')?.value, f = document.getElementById('lv-from')?.value, e = document.getElementById('lv-to')?.value;
+  const reason = (document.getElementById('lv-reason')?.value || '').trim();
+  if (!t || !f || !e) { alert('اختر المحفظ وتاريخ البداية والنهاية'); return; }
+  if (e < f) { alert('تاريخ النهاية قبل البداية'); return; }
+  const { error } = await sb.from('teacher_leaves').insert({ teacher_id: t, from_date: f, to_date: e, reason: reason || null });
+  if (error) { alert('تعذر الحفظ: ' + error.message); return; }
+  loadActivity();
+}
+async function delTeacherLeave(id) {
+  if (!confirm('حذف هذه الإجازة؟')) return;
+  const { error } = await sb.from('teacher_leaves').delete().eq('id', id);
+  if (error) { alert('تعذر الحذف: ' + error.message); return; }
+  loadActivity();
+}
 function relDays(dateStr) {
   if (!dateStr) return null;
   const a = new Date(ymdLocal(new Date()) + 'T00:00:00'), b = new Date(String(dateStr).slice(0,10) + 'T00:00:00');
@@ -4366,7 +4381,7 @@ async function loadActivity() {
       if (!myCircleIds.length) { root.innerHTML = emptyDiv('🧑‍💼', 'لم يتم تعيينك على أي حلقة بعد.'); return; }
     }
     const [profs0, circles, students, att, memo, beh, wk, mr, evs, sc, rev] = await Promise.all([
-      isSup ? Promise.resolve([]) : fetchAllRows(() => sb.from('profiles').select('id,full_name,role,phone').in('role', ['teacher','supervisor'])),
+      isSup ? Promise.resolve([]) : fetchAllRows(() => sb.from('profiles').select('id,full_name,role,phone,activity_excluded').in('role', ['teacher','supervisor'])),
       fetchAllRows(() => isSup ? sb.from('circles').select('id,name,teacher_id,teacher_name').in('id', myCircleIds) : sb.from('circles').select('id,name,teacher_id,teacher_name')),
       fetchAllRows(() => sb.from('students').select('id,circle_id,created_at')),
       fetchAllRows(() => sb.from('attendance').select('date,created_by,status,student_id').gte('date', fromStr)),
@@ -4386,7 +4401,7 @@ async function loadActivity() {
       circles.forEach(c => { if (c.teacher_id && !seen[c.teacher_id]) seen[c.teacher_id] = { id: c.teacher_id, full_name: c.teacher_name || 'محفظ', role: 'teacher' }; });
       profs = Object.values(seen).concat([{ id: CU.id, full_name: CP.full_name, role: 'supervisor' }]);
     }
-    const teachers = profs.filter(p => p.role === 'teacher');
+    const teachers = profs.filter(p => p.role === 'teacher' && !p.activity_excluded);
     const sups = profs.filter(p => p.role === 'supervisor');
     const circlesOf = {}; circles.forEach(c => { (circlesOf[c.teacher_id] = circlesOf[c.teacher_id] || []).push(c); });
     const stuCount = {}; const newStu = {};
@@ -4396,12 +4411,22 @@ async function loadActivity() {
       stuCount[t] = (stuCount[t] || 0) + 1;
       if (s.created_at && ymdLocal(new Date(s.created_at)) >= periodFrom) newStu[t] = (newStu[t] || 0) + 1;
     });
-    const agg = {}; const T = id => agg[id] = agg[id] || { attDays:new Set(), pres:0, abs:0, memo:0, rev:0, beh:0, last:null };
+    // ===== أيام الدوام (الأحد–الأربعاء) والفترة السابقة للمقارنة =====
+    const _dparse = ds => new Date(ds + 'T00:00:00');
+    const todayStrA = ymdLocal(now);
+    const workdays = []; for (const d = _dparse(periodFrom); ymdLocal(d) <= todayStrA; d.setDate(d.getDate() + 1)) { if (d.getDay() <= 3) workdays.push(ymdLocal(d)); }
+    const periodLen = period === '1' ? 1 : (period === 'month' ? 0 : parseInt(period));
+    let prevFrom = null;
+    if (periodLen) { const pd = _dparse(periodFrom); pd.setDate(pd.getDate() - periodLen); prevFrom = ymdLocal(pd); if (prevFrom < fromStr) prevFrom = null; }
+    let leaves = []; try { leaves = await fetchAllRows(() => sb.from('teacher_leaves').select('id,teacher_id,from_date,to_date,reason')); } catch(e) { leaves = []; }
+    const leaveDaysOf = tid => workdays.filter(d => leaves.some(l => l.teacher_id === tid && d >= l.from_date && d <= l.to_date));
+    const agg = {}; const T = id => agg[id] = agg[id] || { attDays:new Set(), pres:0, abs:0, exc:0, memo:0, rev:0, beh:0, last:null, cur:0, prv:0 };
+    const cnt = (o, d) => { if (d >= periodFrom) o.cur++; else if (prevFrom && d >= prevFrom) o.prv++; };
     const touch = (o, d) => { if (!o.last || d > o.last) o.last = d; };
-    att.forEach(r => { const o = T(r.created_by); touch(o, r.date); if (r.date >= periodFrom) { o.attDays.add(r.date); if (r.status === 'present') o.pres++; else if (r.status === 'absent') o.abs++; } });
-    rev.forEach(r => { const o = T(r.recorded_by); touch(o, r.date); if (r.date >= periodFrom) o.rev++; });
-    memo.forEach(r => { const o = T(r.recorded_by); touch(o, r.date); if (r.date >= periodFrom) o.memo++; });
-    beh.forEach(r => { const o = T(r.recorded_by); touch(o, r.date); if (r.date >= periodFrom) o.beh++; });
+    att.forEach(r => { const o = T(r.created_by); touch(o, r.date); cnt(o, r.date); if (r.date >= periodFrom) { o.attDays.add(r.date); if (r.status === 'present') o.pres++; else if (r.status === 'absent') o.abs++; else if (r.status === 'excused') o.exc++; } });
+    rev.forEach(r => { const o = T(r.recorded_by); touch(o, r.date); cnt(o, r.date); if (r.date >= periodFrom) o.rev++; });
+    memo.forEach(r => { const o = T(r.recorded_by); touch(o, r.date); cnt(o, r.date); if (r.date >= periodFrom) o.memo++; });
+    beh.forEach(r => { const o = T(r.recorded_by); touch(o, r.date); cnt(o, r.date); if (r.date >= periodFrom) o.beh++; });
     // التقرير الأسبوعي: عدد الطلاب الذين أُرسل لهم هذا الأسبوع مقابل من حضر منهم
     const sentByTeacher = {}; wk.forEach(r => { const t = r.teacher_id || circleTeacher[r.circle_id]; sentByTeacher[t] = (sentByTeacher[t] || 0) + (r.sent_count || 0); });
     const presentWeek = new Set(att.filter(r => r.date >= weekStartLocal && r.status === 'present').map(r => r.student_id));
@@ -4410,13 +4435,15 @@ async function loadActivity() {
     const mrBy = {}, mrAt = {}; mr.forEach(r => { mrBy[r.teacher_id] = r.status; mrAt[r.teacher_id] = r.submitted_at; });
 
     const rows = teachers.map(t => {
-      const a = agg[t.id] || { attDays:new Set(), pres:0, abs:0, memo:0, rev:0, beh:0, last:null };
+      const a = agg[t.id] || { attDays:new Set(), pres:0, abs:0, exc:0, memo:0, rev:0, beh:0, last:null, cur:0, prv:0 };
       const circ = circlesOf[t.id] || [];
+      const lvDays = leaveDaysOf(t.id);
+      const W = workdays.length - lvDays.length; // أيام دوام هذا المحفظ في الفترة بعد خصم إجازته
       const done = (a.attDays.size > 0 ? 1 : 0) + (a.memo > 0 ? 1 : 0);
-      const level = !circ.length ? 'none' : done === 2 ? 'ok' : done === 1 ? 'mid' : 'bad';
-      return { t, circ, a, level, students: stuCount[t.id] || 0, newS: newStu[t.id] || 0, sent: sentByTeacher[t.id] || 0, elig: eligibleByTeacher[t.id] || 0, mr: mrBy[t.id] || null, mrAt: mrAt[t.id] || null };
+      const level = !circ.length ? 'none' : workdays.length === 0 ? 'off' : (W <= 0 ? 'leave' : done === 2 ? 'ok' : done === 1 ? 'mid' : 'bad');
+      return { t, circ, a, level, W, students: stuCount[t.id] || 0, newS: newStu[t.id] || 0, sent: sentByTeacher[t.id] || 0, elig: eligibleByTeacher[t.id] || 0, mr: mrBy[t.id] || null, mrAt: mrAt[t.id] || null };
     }).filter(r => r.circ.length);
-    const order = { bad:0, mid:1, ok:2, none:3 };
+    const order = { bad:0, mid:1, ok:2, none:3, leave:3, off:3 };
     rows.sort((x, y) => order[x.level] - order[y.level] || (x.t.full_name || '').localeCompare(y.t.full_name || '', 'ar'));
 
     // المشرفون
@@ -4432,7 +4459,7 @@ async function loadActivity() {
     }).sort((x, y) => order[x.level] - order[y.level]);
 
     const nameOf = id => (profs.find(p => p.id === id) || {}).full_name || '—';
-    const badge = lv => lv === 'ok' ? '<span class="badge badge-green">🟢 منتظم</span>' : lv === 'mid' ? '<span class="badge badge-yellow">🟡 ناقص</span>' : lv === 'bad' ? '<span class="badge badge-red">🔴 لم يسجّل</span>' : '<span class="badge bg">—</span>';
+    const badge = lv => lv === 'ok' ? '<span class="badge badge-green">🟢 منتظم</span>' : lv === 'mid' ? '<span class="badge badge-yellow">🟡 ناقص</span>' : lv === 'bad' ? '<span class="badge badge-red">🔴 لم يسجّل</span>' : lv === 'leave' ? '<span class="badge bg">🏖️ في إجازة</span>' : lv === 'off' ? '<span class="badge bg">عطلة</span>' : '<span class="badge bg">—</span>';
     const chk = ok => ok ? '<span style="color:#1d6b3a;font-weight:800">✔</span>' : '<span style="color:#a3262b;font-weight:800">✘</span>';
     const bad = rows.filter(r => r.level === 'bad'), mid = rows.filter(r => r.level === 'mid'), ok = rows.filter(r => r.level === 'ok');
     const supIncomplete = supRows.filter(r => r.level === 'bad' || r.level === 'mid');
@@ -4500,18 +4527,50 @@ async function loadActivity() {
       html += `</div></div>`;
     }
 
+    if (workdays.length === 0) html += `<div class="card" style="border-right:5px solid var(--gold)"><div class="cb">📅 الفترة المختارة لا تحتوي أيام دوام (الدوام من الأحد إلى الأربعاء)، لذلك لا يُحتسب تقصير. اختر «آخر 7 أيام» أو «هذا الشهر».</div></div>`;
+    if (!isSup) {
+      const allCirc = (typeof circles0 !== 'undefined') ? circles0 : circles;
+      const noCirc = teachers.filter(t => !allCirc.some(c => c.teacher_id === t.id));
+      if (noCirc.length) html += `<div class="card" style="border-right:5px solid #c9962e"><div class="cb">⚠️ <strong>محفظون غير مرتبطين بحلقة (لا يظهرون في الجدول):</strong> ${noCirc.map(t => escapeHtml(t.full_name)).join('، ')} — اربطهم بحلقة من صفحة «الحلقات».</div></div>`;
+    }
+    // إجازات المحفظين (تسجيلها للمدير فقط)
+    {
+      const todayK = ymdLocal(now);
+      const act = leaves.filter(l => l.to_date >= todayK).sort((x, y) => x.from_date.localeCompare(y.from_date));
+      const nameById = id => (profs.find(p => p.id === id) || {}).full_name || '—';
+      html += `<div class="card"><div class="ch"><h3>🏖️ إجازات المحفظين (${act.length})</h3></div><div class="cb">`;
+      html += act.length ? act.map(l => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray2);font-size:13px"><span><strong>${escapeHtml(nameById(l.teacher_id))}</strong> — من ${l.from_date} إلى ${l.to_date}${l.reason ? ' — ' + escapeHtml(l.reason) : ''}</span>${CP.role === 'admin' ? `<button class="btn btn-o btn-sm" onclick="delTeacherLeave('${l.id}')">حذف</button>` : ''}</div>`).join('') : '<div style="color:var(--mid);font-size:13px">لا توجد إجازات حالية أو قادمة.</div>';
+      if (CP.role === 'admin') html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:end">
+        <div><label style="font-size:11px;display:block">المحفظ</label><select id="lv-teacher" style="padding:8px;border-radius:10px;font-family:'Cairo',sans-serif">${teachers.map(t => `<option value="${t.id}">${escapeHtml(t.full_name)}</option>`).join('')}</select></div>
+        <div><label style="font-size:11px;display:block">من</label><input type="date" id="lv-from" value="${todayK}" style="padding:8px;border-radius:10px"></div>
+        <div><label style="font-size:11px;display:block">إلى</label><input type="date" id="lv-to" value="${todayK}" style="padding:8px;border-radius:10px"></div>
+        <div style="flex:1;min-width:120px"><label style="font-size:11px;display:block">السبب (اختياري)</label><input type="text" id="lv-reason" style="padding:8px;border-radius:10px;width:100%" placeholder="مرض، سفر..."></div>
+        <button class="btn btn-gold" onclick="addTeacherLeave()">➕ تسجيل إجازة</button></div>`;
+      html += `</div></div>`;
+    }
+
     html += `<div class="card"><div class="ch"><h3>👨‍🏫 المحفظون (${rows.length})</h3></div><div class="cb"><div class="tw"><table>
-      <thead><tr><th>المحفظ</th><th>الحلقة</th><th>الطلاب</th><th>الحضور والغياب</th><th>الحفظ</th><th>المراجعة</th><th>السلوك</th><th>التقرير الشهري — ${monthName}</th><th>آخر نشاط</th><th>الحالة</th></tr></thead><tbody>`;
+      <thead><tr><th>المحفظ</th><th>الحلقة</th><th>الطلاب</th><th>الحضور والغياب</th><th>الحفظ</th><th>المراجعة</th><th>السلوك</th><th>التقرير الشهري — ${monthName}</th><th>آخر نشاط</th><th>الحالة</th><th>الاتجاه</th></tr></thead><tbody>`;
     rows.forEach(r => {
       html += `<tr>
         <td><strong>${escapeHtml(r.t.full_name)}</strong></td>
         <td>${r.circ.map(c => escapeHtml(c.name)).join('، ')}</td>
         <td>${r.students}${r.newS ? ` <span class="badge badge-green">+${r.newS} جديد</span>` : ''}${r.students === 0 ? ' <span class="badge badge-red">لم يضف طلابًا</span>' : ''}</td>
-        <td style="white-space:nowrap">${r.a.attDays.size ? `<span style="color:#1d6b3a;font-weight:700">✔ ${r.a.pres}</span> &nbsp; <span style="color:#a3262b;font-weight:700">✘ ${r.a.abs}</span><div style="font-size:10px;color:var(--mid)">${r.a.attDays.size} يوم مسجّل</div>` : '<span style="color:#a3262b">لم يسجّل</span>'}</td>
+        <td style="white-space:nowrap">${r.a.attDays.size ? `<span style="color:#1d6b3a;font-weight:700">✔ ${r.a.pres}</span> &nbsp; <span style="color:#a3262b;font-weight:700">✘ ${r.a.abs}</span>${r.a.exc ? ` &nbsp; <span style="color:#c9962e;font-weight:700">~ ${r.a.exc}</span>` : ''}<div style="font-size:10px;color:var(--mid)">${r.a.attDays.size}${r.W > 0 ? ' من ' + r.W : ''} يوم مسجّل</div>` : '<span style="color:#a3262b">لم يسجّل</span>'}</td>
         <td>${r.a.memo || '<span style="color:#a3262b">0</span>'}</td><td>${r.a.rev || '<span style="color:#a3262b">0</span>'}</td><td>${r.a.beh || '<span style="color:#a3262b">0</span>'}</td>
         <td style="text-align:center;white-space:nowrap">${r.mr === 'submitted' ? '<span class="badge badge-green">✅ أُرسل</span>' : r.mr ? '<span class="badge badge-yellow">📝 مسوّدة</span>' : (now.getDate() < 25 ? '<span class="badge bg">⏳ لم يُرسل</span>' : '<span class="badge badge-red">❌ لم يُرسل</span>')}</td>
         <td style="white-space:nowrap">${relLabel(r.a.last)}</td>
-        <td>${badge(r.level)}</td></tr>`;
+        <td>${badge(r.level)}</td>
+        <td style="white-space:nowrap">${(() => {
+          if (!prevFrom || r.level === 'leave' || r.level === 'off' || r.level === 'none') return '<span style="color:var(--mid)">—</span>';
+          const c = r.a.cur, p = r.a.prv;
+          if (!p && !c) return '<span style="color:var(--mid)">—</span>';
+          if (!p) return '<span style="color:#1d6b3a;font-weight:700">▲ جديد</span>';
+          if (!c) return '<span style="color:#a3262b;font-weight:700">▼ توقف</span>';
+          const ch = Math.round((c - p) / p * 100);
+          if (Math.abs(ch) < 10) return '<span style="color:var(--mid)">◄ ثابت</span>';
+          return ch > 0 ? `<span style="color:#1d6b3a;font-weight:700">▲ +${ch}%</span>` : `<span style="color:#a3262b;font-weight:700">▼ ${ch}%</span>`;
+        })()}</td></tr>`;
     });
     html += `</tbody></table></div></div></div>`;
 
@@ -4580,7 +4639,7 @@ async function loadActivity() {
         <td style="white-space:nowrap">${r.last ? evMonthLabel(r.last) : '—'}</td><td>${badge(r.level)}</td></tr>`;
     });
     html += `</tbody></table></div></div></div>
-      <div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">🟢 منتظم = سجّل حضورًا وحفظًا في الفترة، 🟡 ناقص = سجّل أحدهما فقط، 🔴 = لم يسجّل شيئًا. يعتمد الحساب على آخر 30 يومًا كحدٍّ أقصى.<div style="margin-top:4px">📋 التقرير الشهري: ✅ أُرسل = رفعه المحفظ، 📝 مسوّدة = ولّده ولم يضغط إرسال، ⏳/❌ لم يُرسل = لا يوجد له تقرير هذا الشهر (يتحول للأحمر بعد يوم 25).</div></div>`;
+      <div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">✔ حاضر، ✘ غائب، ~ بعذر. 🟢 منتظم = سجّل حضورًا وحفظًا في الفترة، 🟡 ناقص = سجّل أحدهما فقط، 🔴 = لم يسجّل شيئًا. يعتمد الحساب على آخر 30 يومًا كحدٍّ أقصى.<div style="margin-top:4px">📋 التقرير الشهري: ✅ أُرسل = رفعه المحفظ، 📝 مسوّدة = ولّده ولم يضغط إرسال، ⏳/❌ لم يُرسل = لا يوجد له تقرير هذا الشهر (يتحول للأحمر بعد يوم 25).</div></div>`;
 
     window._actData = { periodLabel, monthName, bad, mid, supIncomplete };
     root.innerHTML = html;
