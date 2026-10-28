@@ -853,7 +853,15 @@ async function loadProfile() {
   initApp();
 }
 
-document.getElementById('logoutbtn').addEventListener('click', async () => { await sb.auth.signOut(hasSavedBiometric() ? { scope: 'local' } : undefined); location.reload(); });
+document.getElementById('logoutbtn').addEventListener('click', async () => {
+  // مع البصمة: نخرج محلياً فقط دون إلغاء الجلسة في الخادم، حتى تبقى البصمة صالحة
+  if (hasSavedBiometric()) {
+    try { Object.keys(localStorage).filter(k => /^sb-.*-auth-token/.test(k)).forEach(k => localStorage.removeItem(k)); } catch(e) {}
+  } else {
+    try { await sb.auth.signOut(); } catch(e) {}
+  }
+  location.reload();
+});
 
 function showAlert(id, msg, type) {
   const el = document.getElementById(id);
@@ -896,7 +904,7 @@ function getSavedBiometric() {
 function syncBiometricToken(session) {
   try {
     const v = getSavedBiometric();
-    if (v && session && session.refresh_token) {
+    if (v && session && session.refresh_token && session.user && session.user.email === v.email) {
       v.rt = session.refresh_token;
       localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(v));
     }
@@ -1013,8 +1021,7 @@ async function doBiometricLogin() {
     // البصمة صحيحة — الآن نسجل الدخول تلقائياً
     const { data, error } = await sb.auth.refreshSession({ refresh_token: saved.rt });
     if (error || !data || !data.user) {
-      localStorage.removeItem(BIOMETRIC_KEY);
-      showAlert('auth-alert', 'انتهت صلاحية البصمة. ادخل يدوياً مرة واحدة ثم فعّلها من جديد.', 'err');
+      showAlert('auth-alert', 'انتهت جلسة البصمة. ادخل يدوياً مرة واحدة وستعمل البصمة بعدها تلقائياً.', 'err');
       btn.disabled = false; btn.innerHTML = '<span style="font-size:22px">👆</span> دخول بالبصمة';
       return;
     }
