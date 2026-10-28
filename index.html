@@ -4329,7 +4329,7 @@ async function fetchAllRows(makeQuery) {
 }
 function waTeacher(id) {
   const m = (window._waMsgs || {})[id]; if (!m) return;
-  window.open('https://wa.me/' + m.phone + '?text=' + encodeURIComponent(m.text), '_blank');
+  window.open('https://wa.me/' + (m.phone || '') + '?text=' + encodeURIComponent(m.text), '_blank');
 }
 async function addTeacherLeave() {
   const t = document.getElementById('lv-teacher')?.value, f = document.getElementById('lv-from')?.value, e = document.getElementById('lv-to')?.value;
@@ -4517,7 +4517,7 @@ async function loadActivity() {
     window._waMsgs = {};
     const waBtnFor = r => {
       const ph = String((r.t.phone || '')).replace(/\D/g, '');
-      if (!ph || ['leave','off','none'].includes(r.level)) return '';
+      if (['leave','off','none'].includes(r.level)) return '';
       const L = [];
       if (r.level === 'bad') L.push(`• لم تسجّل حضورًا ولا حفظًا خلال ${periodLabel}.`);
       else if (r.level === 'mid') L.push(`• تسجيلك ناقص خلال ${periodLabel}: ${r.a.attDays.size === 0 ? 'لم تسجّل الحضور' : 'لم تسجّل الحفظ'}.`);
@@ -4529,7 +4529,7 @@ async function loadActivity() {
       });
       if (now.getDate() >= 25 && r.mr !== 'submitted') L.push(`• تقرير ${monthName} الشهري: ${r.mr ? 'مسوّدة لم تُرسل بعد' : 'لم يُرفع بعد'}.`);
       if (!L.length) return '';
-      const phone = ph.length === 8 ? '965' + ph : ph.replace(/^0+/, '');
+      const phone = !ph ? '' : (ph.length === 8 ? '965' + ph : ph.replace(/^0+/, '')); // بلا رقم: يفتح واتساب لاختيار جهة الاتصال
       window._waMsgs[r.t.id] = { phone, text: `السلام عليكم ورحمة الله وبركاته\nأخي الفاضل ${r.t.full_name}،\nمتابعة من إدارة المركز، نلاحظ الآتي:\n${L.join('\n')}\n\nنرجو استكمالها، وجزاكم الله خيرًا 🌿\nجمعية آيات الخيرية` };
       return ` <button class="btn btn-sm" onclick="waTeacher('${r.t.id}')" style="background:#25D366;color:#fff;border:none;border-radius:14px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700">📱 واتساب</button>`;
     };
