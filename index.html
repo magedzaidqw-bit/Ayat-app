@@ -4451,16 +4451,25 @@ async function loadActivity() {
     }
     let wkMonthRows = [];
     if (wkWeeks.length) {
-      try { wkMonthRows = await fetchAllRows(() => sb.from('weekly_report_sends').select('teacher_id,circle_id,sent_count,week_start').gte('week_start', ymdLocal(new Date(new Date(wkWeeks[0].key + 'T00:00:00').getTime() - 86400000)))); } catch(e) { wkMonthRows = []; }
+      try { wkMonthRows = await fetchAllRows(() => sb.from('weekly_report_sends').select('teacher_id,circle_id,student_id,sent_count,week_start').gte('week_start', ymdLocal(new Date(new Date(wkWeeks[0].key + 'T00:00:00').getTime() - 86400000)))); } catch(e) { wkMonthRows = []; }
     }
-    const wkSent = {}; // [teacher][weekKey] = عدد الطلاب
+    // نعدّ الطلاب المختلفين (وليس مرات الضغط)، وللسجلات القديمة بلا طالب نأخذ مجموعها بحدّ أقصى عدد طلاب الحلقة
+    const circleN = {}; students.forEach(s0 => { circleN[s0.circle_id] = (circleN[s0.circle_id] || 0) + 1; });
+    const wkAcc = {}; // [teacher][weekKey][circle] = { ids:Set, legacy:n }
     wkMonthRows.forEach(r => {
       const dt = new Date(r.week_start + 'T00:00:00');
       if (dt.getDay() === 6) dt.setDate(dt.getDate() + 1); // سجلات منتصف الليل التي حُفظت بتاريخ السبت (فرق التوقيت)
       const k = ymdLocal(dt), t = r.teacher_id || circleTeacher[r.circle_id];
       if (!t) return;
-      (wkSent[t] = wkSent[t] || {})[k] = ((wkSent[t] || {})[k] || 0) + (r.sent_count || 0);
+      const o = (((wkAcc[t] = wkAcc[t] || {})[k] = wkAcc[t][k] || {})[r.circle_id] = wkAcc[t][k][r.circle_id] || { ids: new Set(), legacy: 0 });
+      if (r.student_id) o.ids.add(r.student_id); else o.legacy += (r.sent_count || 0);
     });
+    const wkSent = {}; // [teacher][weekKey] = عدد الطلاب المختلفين
+    Object.keys(wkAcc).forEach(t => Object.keys(wkAcc[t]).forEach(k => {
+      let tot = 0;
+      Object.keys(wkAcc[t][k]).forEach(cid => { const o = wkAcc[t][k][cid]; const cap = circleN[cid] || Infinity; tot += Math.min(cap, o.ids.size + o.legacy); });
+      (wkSent[t] = wkSent[t] || {})[k] = tot;
+    }));
 
     let html = periodNoticeHtml() + `<div class="cp-head"><div>
         <div class="cp-title">${isSup ? '🔔 متابعة حلقاتي والنشاط' : '🔔 متابعة الحلقات ونشاط المحفظين والمشرفين'}</div>
@@ -5687,6 +5696,7 @@ async function sendWeeklyReportWA() {
 
   let sent = 0, skipped = 0, excludedAbsent = 0;
   const sentByCircle = {};
+  let sentStudentsList = [];
   for (const s of students) {
     if (!s.parent_phone) { skipped++; continue; }
 
@@ -5732,6 +5742,7 @@ ${memoSummary}
     window.open(url, '_blank');
     sent++;
     sentByCircle[s.circle_id] = (sentByCircle[s.circle_id]||0) + 1;
+    sentStudentsList.push({ circle_id: s.circle_id, student_id: s.id });
     await new Promise(r => setTimeout(r, 1000));
   }
 
@@ -5739,8 +5750,8 @@ ${memoSummary}
   // (مهم للمحفظ الذي لديه أكثر من حلقة)، ليظهر ذلك للمشرف بدون أي خطوة إضافية من المحفظ
   let logError = null;
   if (sent > 0) {
-    const rows = Object.entries(sentByCircle).map(([circle_id, count]) => ({
-      teacher_id: CU.id, circle_id, week_start: weekStartStr, sent_count: count
+    const rows = sentStudentsList.map(x => ({
+      teacher_id: CU.id, circle_id: x.circle_id, student_id: x.student_id, week_start: weekStartStr, sent_count: 1
     }));
     const { error } = await sb.from('weekly_report_sends').insert(rows);
     if (error) { logError = error.message; console.error('تعذر تسجيل حالة الإرسال الأسبوعي:', error); }
@@ -5815,10 +5826,12 @@ async function loadSupHome() {
 
   // حالة إرسال التقرير الأسبوعي لكل حلقة خلال هذا الأسبوع — لمتابعة التزام المحفظين بدقة
   const { data: sends } = circleIds.length
-    ? await sb.from('weekly_report_sends').select('circle_id,sent_count').eq('week_start', weekStartStr).in('circle_id', circleIds)
+    ? await sb.from('weekly_report_sends').select('circle_id,student_id,sent_count').eq('week_start', weekStartStr).in('circle_id', circleIds)
     : { data: [] };
   const sentCountByCircle = {};
-  (sends||[]).forEach(s => { sentCountByCircle[s.circle_id] = (sentCountByCircle[s.circle_id]||0) + (s.sent_count||0); });
+  { const acc = {}; // نعدّ الطلاب المختلفين لا مرات الضغط؛ السجلات القديمة بلا طالب تُجمع بحدّ أقصى عدد طلاب الحلقة
+    (sends||[]).forEach(s => { const o = acc[s.circle_id] = acc[s.circle_id] || { ids: new Set(), legacy: 0 }; if (s.student_id) o.ids.add(s.student_id); else o.legacy += (s.sent_count||0); });
+    Object.keys(acc).forEach(cid => { const cap = (studentsByCircle[cid] || []).length || Infinity; sentCountByCircle[cid] = Math.min(cap, acc[cid].ids.size + acc[cid].legacy); }); }
 
   // عدد الطلاب "المستحقين" لتقرير هذا الأسبوع = من حضر ولو مرة واحدة (نستثني الغياب الكامل)
   const { data: weekAtt } = allStudentIds.length
@@ -7155,7 +7168,7 @@ async function generateWeeklyReport() {
     <div class="student-report-row">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
         <div style="font-weight:700">${h(s.name)}</div>
-        ${s.phone ? `<button onclick="sendWeeklyWA('${esc(s.phone)}','${s.name.replace(/'/g,"\\'")}',${s.present},${s.absent},${s.excused},${s.memoSessions},${s.memoVerses},'${s.memoMastery}','${s.behAvg}','${startDate}','${endDate}','${s.circle_id}')"
+        ${s.phone ? `<button onclick="sendWeeklyWA('${esc(s.phone)}','${s.name.replace(/'/g,"\\'")}',${s.present},${s.absent},${s.excused},${s.memoSessions},${s.memoVerses},'${s.memoMastery}','${s.behAvg}','${startDate}','${endDate}','${s.circle_id}','${s.id}')"
           style="padding:5px 12px;background:#25D366;color:white;border:none;border-radius:20px;cursor:pointer;font-size:11px;font-family:'Cairo',sans-serif;font-weight:700">
           📱 إرسال لولي الأمر
         </button>` : '<span style="font-size:11px;color:var(--mid)">لا يوجد هاتف</span>'}
@@ -7192,7 +7205,7 @@ async function generateWeeklyReport() {
     </div>`;
 }
 
-function sendWeeklyWA(phone, name, present, absent, excused, memoSessions, memoVerses, memoMastery, behAvg, startDate, endDate, circleId) {
+function sendWeeklyWA(phone, name, present, absent, excused, memoSessions, memoVerses, memoMastery, behAvg, startDate, endDate, circleId, studentId) {
   const fmtAr = d => new Date(d).toLocaleDateString('ar-KW', {day:'numeric',month:'long'});
   const mv = parseFloat(memoMastery); const masteryText = isNaN(mv) ? '—' : mv>=4.75?'ممتاز':mv>=4.25?'جيد جداً':mv>=3?'جيد':'ضعيف';
   const attRate = present+absent>0 ? Math.round(present/(present+absent)*100) : 0;
@@ -7209,7 +7222,7 @@ function sendWeeklyWA(phone, name, present, absent, excused, memoSessions, memoV
     const now = new Date();
     now.setDate(now.getDate() - now.getDay());
     const weekStartStr = now.toISOString().split('T')[0];
-    sb.from('weekly_report_sends').insert({ teacher_id: CU.id, circle_id: circleId, week_start: weekStartStr, sent_count: 1 })
+    sb.from('weekly_report_sends').insert({ teacher_id: CU.id, circle_id: circleId, student_id: studentId || null, week_start: weekStartStr, sent_count: 1 })
       .then(({error}) => {
         if (error) {
           console.error('تعذر تسجيل إرسال التقرير الأسبوعي:', error);
