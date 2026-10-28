@@ -4445,7 +4445,8 @@ async function loadActivity() {
       while (fd.getDay() !== 0) fd.setDate(fd.getDate() + 1);
       const todayLocal = ymdLocal(now);
       for (const d = new Date(fd); d.getMonth() === now.getMonth(); d.setDate(d.getDate() + 7)) {
-        if (ymdLocal(d) <= todayLocal) wkWeeks.push({ key: ymdLocal(d), label: d.getDate() + ' ' + EV_MONTHS_AR[d.getMonth()] });
+        if (ymdLocal(d) <= todayLocal) { const e = new Date(d); e.setDate(e.getDate() + 3); // أيام الدوام: الأحد إلى الأربعاء
+          wkWeeks.push({ key: ymdLocal(d), label: d.getMonth() === e.getMonth() ? `${d.getDate()} إلى ${e.getDate()} ${EV_MONTHS_AR[e.getMonth()]}` : `${d.getDate()} ${EV_MONTHS_AR[d.getMonth()]} إلى ${e.getDate()} ${EV_MONTHS_AR[e.getMonth()]}` }); }
       }
     }
     let wkMonthRows = [];
@@ -4534,7 +4535,7 @@ async function loadActivity() {
       if (!wkWeeks.length) {
         html += `<div style="color:var(--mid);padding:8px">لم يبدأ أول أسبوع من ${monthName} بعد (تبدأ الأسابيع يوم الأحد).</div>`;
       } else {
-        html += `<div class="tw"><table><thead><tr><th>المحفظ</th>${wkWeeks.map((w, i) => `<th style="text-align:center">الأسبوع ${i + 1}<div style="font-size:10px;font-weight:400">من ${w.label}</div></th>`).join('')}</tr></thead><tbody>`;
+        html += `<div class="tw"><table><thead><tr><th>المحفظ</th>${wkWeeks.map((w, i) => `<th style="text-align:center">الأسبوع ${i + 1}<div style="font-size:11px;font-weight:600">من ${w.label}</div></th>`).join('')}</tr></thead><tbody>`;
         const sentCount = wkWeeks.map(() => 0);
         rows.forEach(r => {
           html += `<tr><td><strong>${escapeHtml(r.t.full_name)}</strong></td>`;
