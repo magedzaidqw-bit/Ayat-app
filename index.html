@@ -221,6 +221,13 @@ tbody tr:hover { background:#fbfaf6; }
 @media(max-width:600px){
   .content { padding:10px; }
   .header { padding:0 10px; height:60px; }
+  .header { gap:6px; overflow:visible; }
+  .hbrand { min-width:0; flex:0 1 auto; gap:6px; }
+  .hbrand span { display:none; }
+  .huser { min-width:0; flex:1 1 auto; justify-content:flex-end; gap:6px; }
+  .huser > * { flex:none; }
+  .huser .ubadge { flex:0 1 auto; min-width:0; max-width:72px; }
+  .notif-bell { padding:6px 9px; font-size:16px; }
   #ayat-menu-btn { display:flex !important; align-items:center; justify-content:center; }
   .ayat-header-actions {
     display:none;
@@ -720,7 +727,7 @@ tbody tr:hover { background:#fbfaf6; }
         <button class="lbtn" id="logoutbtn">خروج</button>
       </div>
       <!-- زر القائمة على الجوال -->
-      <button id="ayat-menu-btn" onclick="toggleAyatMenu()" style="display:none;width:38px;height:38px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:white;cursor:pointer;font-size:16px;">☰</button>
+      <button id="ayat-menu-btn" onclick="toggleAyatMenu()" aria-label="القائمة" style="display:none;flex:none;width:42px;height:42px;border-radius:10px;border:1.5px solid var(--gold);background:rgba(201,161,83,0.18);color:var(--gold3);cursor:pointer;font-size:24px;font-weight:800;line-height:1;">☰</button>
     </div>
   </div>
 
