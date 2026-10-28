@@ -4327,6 +4327,10 @@ async function fetchAllRows(makeQuery) {
   }
   return out;
 }
+function waTeacher(id) {
+  const m = (window._waMsgs || {})[id]; if (!m) return;
+  window.open('https://wa.me/' + m.phone + '?text=' + encodeURIComponent(m.text), '_blank');
+}
 async function addTeacherLeave() {
   const t = document.getElementById('lv-teacher')?.value, f = document.getElementById('lv-from')?.value, e = document.getElementById('lv-to')?.value;
   const reason = (document.getElementById('lv-reason')?.value || '').trim();
@@ -4491,12 +4495,43 @@ async function loadActivity() {
       const o = (((wkAcc[t] = wkAcc[t] || {})[k] = wkAcc[t][k] || {})[r.circle_id] = wkAcc[t][k][r.circle_id] || { ids: new Set(), legacy: 0 });
       if (r.student_id) o.ids.add(r.student_id); else o.legacy += (r.sent_count || 0);
     });
+    // الطلاب الذين حضروا في كل أسبوع (من غاب طوال الأسبوع لا يُطلب إرسال تقرير له)
+    const stuCircle = {}; students.forEach(x => stuCircle[x.id] = x.circle_id);
+    const wkPresent = {}; // [teacher][weekKey] = Set
+    att.forEach(r => {
+      if (r.status !== 'present') return;
+      const tt = circleTeacher[stuCircle[r.student_id]]; if (!tt) return;
+      const dd = new Date(r.date + 'T00:00:00'); dd.setDate(dd.getDate() - dd.getDay());
+      const kk = ymdLocal(dd);
+      ((wkPresent[tt] = wkPresent[tt] || {})[kk] = wkPresent[tt][kk] || new Set()).add(r.student_id);
+    });
     const wkSent = {}; // [teacher][weekKey] = عدد الطلاب المختلفين
     Object.keys(wkAcc).forEach(t => Object.keys(wkAcc[t]).forEach(k => {
       let tot = 0;
       Object.keys(wkAcc[t][k]).forEach(cid => { const o = wkAcc[t][k][cid]; const cap = circleN[cid] || Infinity; tot += Math.min(cap, o.ids.size + o.legacy); });
       (wkSent[t] = wkSent[t] || {})[k] = tot;
     }));
+
+    // ===== زر واتساب لكل محفظ مقصّر: رسالة جاهزة بما ينقصه =====
+    window._waMsgs = {};
+    const waBtnFor = r => {
+      const ph = String((r.t.phone || '')).replace(/\D/g, '');
+      if (!ph || ['leave','off','none'].includes(r.level)) return '';
+      const L = [];
+      if (r.level === 'bad') L.push(`• لم تسجّل حضورًا ولا حفظًا خلال ${periodLabel}.`);
+      else if (r.level === 'mid') L.push(`• تسجيلك ناقص خلال ${periodLabel}: ${r.a.attDays.size === 0 ? 'لم تسجّل الحضور' : 'لم تسجّل الحفظ'}.`);
+      else if (r.W > 0 && r.a.attDays.size < r.W) L.push(`• سجّلت الحضور في ${r.a.attDays.size} من ${r.W} أيام دوام خلال ${periodLabel}.`);
+      wkWeeks.forEach(w => {
+        const Dw = (w.key >= fromStr) ? ((wkPresent[r.t.id] || {})[w.key]?.size || 0) : (r.students || 0);
+        const nw = ((wkSent[r.t.id] || {})[w.key]) || 0;
+        if (Dw > 0 && nw < Dw) L.push(`• التقرير الأسبوعي (من ${w.label}): ${nw === 0 ? 'لم يُرسل' : 'أُرسل لـ ' + nw + ' طالب فقط'} من أصل ${Dw} طالب حضروا.`);
+      });
+      if (now.getDate() >= 25 && r.mr !== 'submitted') L.push(`• تقرير ${monthName} الشهري: ${r.mr ? 'مسوّدة لم تُرسل بعد' : 'لم يُرفع بعد'}.`);
+      if (!L.length) return '';
+      const phone = ph.length === 8 ? '965' + ph : ph.replace(/^0+/, '');
+      window._waMsgs[r.t.id] = { phone, text: `السلام عليكم ورحمة الله وبركاته\nأخي الفاضل ${r.t.full_name}،\nمتابعة من إدارة المركز، نلاحظ الآتي:\n${L.join('\n')}\n\nنرجو استكمالها، وجزاكم الله خيرًا 🌿\nجمعية آيات الخيرية` };
+      return ` <button class="btn btn-sm" onclick="waTeacher('${r.t.id}')" style="background:#25D366;color:#fff;border:none;border-radius:14px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700">📱 واتساب</button>`;
+    };
 
     let html = periodNoticeHtml() + `<div class="cp-head"><div>
         <div class="cp-title">${isSup ? '🔔 متابعة حلقاتي والنشاط' : '🔔 متابعة الحلقات ونشاط المحفظين والمشرفين'}</div>
@@ -4553,7 +4588,7 @@ async function loadActivity() {
       <thead><tr><th>المحفظ</th><th>الحلقة</th><th>الطلاب</th><th>الحضور والغياب</th><th>الحفظ</th><th>المراجعة</th><th>السلوك</th><th>التقرير الشهري — ${monthName}</th><th>آخر نشاط</th><th>الحالة</th><th>الاتجاه</th></tr></thead><tbody>`;
     rows.forEach(r => {
       html += `<tr>
-        <td><strong>${escapeHtml(r.t.full_name)}</strong></td>
+        <td><strong>${escapeHtml(r.t.full_name)}</strong>${waBtnFor(r)}</td>
         <td>${r.circ.map(c => escapeHtml(c.name)).join('، ')}</td>
         <td>${r.students}${r.newS ? ` <span class="badge badge-green">+${r.newS} جديد</span>` : ''}${r.students === 0 ? ' <span class="badge badge-red">لم يضف طلابًا</span>' : ''}</td>
         <td style="white-space:nowrap">${r.a.attDays.size ? `<span style="color:#1d6b3a;font-weight:700">✔ ${r.a.pres}</span> &nbsp; <span style="color:#a3262b;font-weight:700">✘ ${r.a.abs}</span>${r.a.exc ? ` &nbsp; <span style="color:#c9962e;font-weight:700">~ ${r.a.exc}</span>` : ''}<div style="font-size:10px;color:var(--mid)">${r.a.attDays.size}${r.W > 0 ? ' من ' + r.W : ''} يوم مسجّل</div>` : '<span style="color:#a3262b">لم يسجّل</span>'}</td>
@@ -4611,11 +4646,13 @@ async function loadActivity() {
             const n = ((wkSent[r.t.id] || {})[w.key]) || 0, N = r.students || 0;
             if (n > 0) sentCount[i]++;
             const isCur = w.key === curWeekKey;
-            const D = (isCur && r.elig) ? r.elig : N; // الأسبوع الحالي: الطلاب الحاضرون هذا الأسبوع، وإلا كل الطلاب
+            const D = (w.key >= fromStr) ? ((wkPresent[r.t.id] || {})[w.key]?.size || 0) : N; // الطلاب الذين حضروا في ذلك الأسبوع فقط
             if (n > 0) {
               const complete = D && n >= D;
               if (complete) html += `<td style="text-align:center;color:#1d6b3a;font-weight:700">✔ ${n} من ${D}</td>`;
               else html += `<td style="text-align:center;color:#c9962e;font-weight:700;background:#fdf6e3">⚠️ أرسل ${n}${D ? ' من ' + D : ''}${D ? `<div style="font-size:11px;font-weight:600">ينقص ${D - n}</div>` : ''}</td>`;
+            } else if (D === 0 && w.key >= fromStr) {
+              html += `<td style="text-align:center;color:var(--mid)">— لا حضور</td>`;
             } else if (w.key === curWeekKey) {
               html += `<td style="text-align:center;color:#c9962e;font-weight:700;background:#fdf6e3">⏳ لم يُرسل بعد${D ? `<div style="font-size:11px;font-weight:600">0 من ${D}</div>` : ''}</td>`;
             } else {
@@ -4625,7 +4662,7 @@ async function loadActivity() {
           html += `</tr>`;
         });
         html += `<tr style="background:#f6f2e6;font-weight:800"><td>أرسل من ${rows.length} محفظ</td>${sentCount.map(c => `<td style="text-align:center">${c} من ${rows.length}</td>`).join('')}</tr>`;
-        html += `</tbody></table></div><div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">الرقم = عدد الطلاب الذين فُتح لهم التقرير للإرسال من إجمالي الطلاب (في الأسبوع الحالي: من حضر منهم). ✔ = أرسل للجميع، ⚠️ برتقالي = أرسل لبعضهم فقط (اتصل بالمحفظ واسأله عن الباقي). تبدأ الأسابيع يوم الأحد، ويبدأ السجل من جديد مع كل شهر.</div>`;
+        html += `</tbody></table></div><div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">الرقم = عدد الطلاب الذين فُتح لهم التقرير للإرسال من إجمالي الطلاب (الطلاب الذين حضروا في ذلك الأسبوع؛ من غاب طوال الأسبوع لا يُحسب). ✔ = أرسل للجميع، ⚠️ برتقالي = أرسل لبعضهم فقط (اتصل بالمحفظ واسأله عن الباقي). تبدأ الأسابيع يوم الأحد، ويبدأ السجل من جديد مع كل شهر.</div>`;
       }
       html += `</div></div>`;
     }
@@ -7204,7 +7241,7 @@ async function generateWeeklyReport() {
   const memo = memoRes.data || [];
   const beh = behRes.data || [];
 
-  const studentData = students.map(s => {
+  let studentData = students.map(s => {
     const sAtt = att.filter(a => a.student_id === s.id);
     const sMemo = memo.filter(m => m.student_id === s.id);
     const sBeh = beh.filter(b => b.student_id === s.id);
@@ -7219,6 +7256,10 @@ async function generateWeeklyReport() {
       behAvg: sBeh.length ? (sBeh.reduce((s,b) => s+b.score, 0)/sBeh.length).toFixed(1) : '—'
     };
   });
+
+  // الطالب الذي غاب طوال الفترة (لا حضور له) لا يدخل في التقرير الأسبوعي
+  const absentAllWeek = studentData.filter(x => x.present === 0);
+  studentData = studentData.filter(x => x.present > 0);
 
   // تنسيق التاريخ بالعربي
   const fmtAr = d => new Date(d).toLocaleDateString('ar-KW', {day:'numeric',month:'long',year:'numeric'});
@@ -7259,7 +7300,7 @@ async function generateWeeklyReport() {
       </div>
       <div class="report-section">
         <h4>🎓 تفاصيل الطلاب — اضغط 📱 لإرسال تقرير ولي الأمر عبر واتساب</h4>
-        ${studentsHtml}
+        ${studentsHtml}${absentAllWeek.length ? `<div style="margin-top:10px;font-size:12px;color:var(--mid);background:#fdf6e3;border-radius:10px;padding:8px 12px">ℹ️ لم يُدرج ${absentAllWeek.length} طالب لغيابهم طوال الفترة: ${absentAllWeek.map(x => x.name).join('، ')}</div>` : ''}
       </div>
     </div>`;
 }
