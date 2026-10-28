@@ -4541,11 +4541,14 @@ async function loadActivity() {
           wkWeeks.forEach((w, i) => {
             const n = ((wkSent[r.t.id] || {})[w.key]) || 0, N = r.students || 0;
             if (n > 0) sentCount[i]++;
+            const isCur = w.key === curWeekKey;
+            const D = (isCur && r.elig) ? r.elig : N; // الأسبوع الحالي: الطلاب الحاضرون هذا الأسبوع، وإلا كل الطلاب
             if (n > 0) {
-              const part = N && n < N * 0.5;
-              html += `<td style="text-align:center;color:${part ? '#c9962e' : '#1d6b3a'};font-weight:700">${part ? '⚠️' : '✔'} ${n}${N ? ' من ' + N : ''}</td>`;
+              const complete = D && n >= D;
+              if (complete) html += `<td style="text-align:center;color:#1d6b3a;font-weight:700">✔ ${n} من ${D}</td>`;
+              else html += `<td style="text-align:center;color:#c9962e;font-weight:700;background:#fdf6e3">⚠️ أرسل ${n}${D ? ' من ' + D : ''}${D ? `<div style="font-size:11px;font-weight:600">ينقص ${D - n}</div>` : ''}</td>`;
             } else if (w.key === curWeekKey) {
-              html += `<td style="text-align:center;color:#c9962e;font-weight:700">⏳ لم يُرسل بعد</td>`;
+              html += `<td style="text-align:center;color:#c9962e;font-weight:700;background:#fdf6e3">⏳ لم يُرسل بعد${D ? `<div style="font-size:11px;font-weight:600">0 من ${D}</div>` : ''}</td>`;
             } else {
               html += `<td style="text-align:center;color:#a3262b;font-weight:700">✘ لم يُرسل</td>`;
             }
@@ -4553,7 +4556,7 @@ async function loadActivity() {
           html += `</tr>`;
         });
         html += `<tr style="background:#f6f2e6;font-weight:800"><td>أرسل من ${rows.length} محفظ</td>${sentCount.map(c => `<td style="text-align:center">${c} من ${rows.length}</td>`).join('')}</tr>`;
-        html += `</tbody></table></div><div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">الرقم = عدد الطلاب الذين فُتح لهم التقرير للإرسال. ⚠️ = أقل من نصف طلاب الحلقة. تبدأ الأسابيع يوم الأحد، ويبدأ السجل من جديد مع كل شهر.</div>`;
+        html += `</tbody></table></div><div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">الرقم = عدد الطلاب الذين فُتح لهم التقرير للإرسال من إجمالي الطلاب (في الأسبوع الحالي: من حضر منهم). ✔ = أرسل للجميع، ⚠️ برتقالي = أرسل لبعضهم فقط (اتصل بالمحفظ واسأله عن الباقي). تبدأ الأسابيع يوم الأحد، ويبدأ السجل من جديد مع كل شهر.</div>`;
       }
       html += `</div></div>`;
     }
