@@ -588,6 +588,9 @@ tbody tr:hover { background:#fbfaf6; }
   padding:10px 0; border-bottom:1px solid var(--gray); flex-wrap:wrap; gap:8px;
 }
 .student-report-row:last-child { border-bottom:none; }
+/* iPhone: لا يختفي الهيدر وزر القائمة تحت شريط الحالة / الجزيرة الديناميكية */
+.header { box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); height:calc(70px + env(safe-area-inset-top,0px)); }
+@media(max-width:600px){ .header { height:calc(60px + env(safe-area-inset-top,0px)); } .ayat-header-actions { top:calc(62px + env(safe-area-inset-top,0px)); } }
 </style>
 </head>
 <body>
