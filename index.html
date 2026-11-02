@@ -5113,11 +5113,15 @@ async function printAllEvalCards() {
   await fillEvTeacherNames(data);
 
   // أحدث تقييم لكل محفظ فقط
+  // التقرير لشهر واحد: أحدث شهر فيه تقييمات
+  const _ym = data.map(e => String(e.eval_date).slice(0,7)).sort().pop();
+  const _mData = data.filter(e => String(e.eval_date).slice(0,7) === _ym);
+  const _monthTxt = EV_MONTHS_AR[parseInt(_ym.slice(5,7)) - 1] + ' ' + _ym.slice(0,4);
   const latest = {};
-  data.forEach(e => { if (!latest[e.teacher_id]) latest[e.teacher_id] = e; });
+  _mData.forEach(e => { if (!latest[e.teacher_id]) latest[e.teacher_id] = e; });
   const sorted = Object.values(latest).sort((a,b)=>(b.total_score/evMax(b.eval_date))-(a.total_score/evMax(a.eval_date)));
 
-  document.getElementById('print-title').textContent = `التقرير الإجمالي لتقييم المحفظين — جمعية آيات الخيرية`;
+  document.getElementById('print-title').textContent = `التقرير الإجمالي لتقييم المحفظين — شهر ${_monthTxt} — جمعية آيات الخيرية`;
   document.getElementById('print-date').innerHTML = (CP.role === 'supervisor' ? `<div style="font-size:17px;font-weight:900;color:#0a1e12;margin:4px 0 6px">كشف تقييم المشرف: ${esc(CP.full_name||'')}</div>` : '') + `تاريخ التقرير: ${new Date().toLocaleDateString('ar-KW')}`;
   document.getElementById('print-table').innerHTML = `
     <table style="width:100%;border-collapse:collapse;margin-top:10px">
