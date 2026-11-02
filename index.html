@@ -3464,14 +3464,15 @@ async function printMemoHistory() {
 
 
 // شريط أدوات نوافذ الطباعة: رجوع للبرنامج + طباعة + مشاركة (يختفي عند الطباعة)
-function withPrintToolbar(html, shareText) {
+function withPrintToolbar(html, shareText, docTitle) {
   const sh = JSON.stringify(shareText || '').replace(/</g, '\\u003c');
   const bar = '<style>.pt-bar{position:sticky;top:0;z-index:9999;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:10px;background:#0a1e12;direction:rtl;font-family:Cairo,Arial,sans-serif}'
     + '.pt-b{display:inline-block!important;cursor:pointer;padding:9px 18px;border-radius:12px;font-weight:800;font-size:14px;color:#fff;background:#1a5230;border:1.5px solid #c9a227;user-select:none;-webkit-user-select:none}'
     + '.pt-b.g{background:#25D366;border-color:#25D366}.pt-b.b{background:#c9a227;color:#0a1e12}'
     + '@media print{.pt-bar{display:none!important}}</style>'
     + '<div class="pt-bar"><div class="pt-b b" onclick="ptBack()">↩️ رجوع للبرنامج</div><div class="pt-b" onclick="window.print()">🖨️ طباعة</div><div class="pt-b g" onclick="ptShare()">📱 مشاركة</div></div>'
-    + '<script>var PT_SHARE=' + sh + ';'
+    + '<script>var PT_SHARE=' + sh + ';var PT_TITLE=' + JSON.stringify(docTitle || '').replace(/</g, '\\u003c') + ';'
+    + 'document.addEventListener("DOMContentLoaded",function(){try{var t=PT_TITLE;if(!t){var h=document.querySelector("h2,h3");t=h?h.innerText.trim():"";}t=t.replace(/[\\/:*?\"<>|]+/g," ").replace(/\\s+/g," ").trim();document.title=t||"تقرير";}catch(e){}});'
     + 'function ptBack(){try{if(window.opener&&!window.opener.closed){window.close();return;}}catch(e){}if(history.length>1){history.back();}else{window.close();}}'
     + 'function ptGeneric(){var t=[];document.querySelectorAll("h2,h3").forEach(function(h,i){if(i<2)t.push("*"+h.innerText.trim()+"*");});var d=document.querySelector(".print-date");if(d)t.push(d.innerText.trim());document.querySelectorAll("table tr").forEach(function(tr,i){var c=[].map.call(tr.children,function(x){return x.innerText.replace(/\\s+/g," ").trim()}).filter(Boolean);if(c.length&&i>0)t.push(c.join(" | "));});return t.join("\\n");}'
     + 'function ptShare(){var t=PT_SHARE||ptGeneric();if(navigator.share){navigator.share({text:t}).catch(function(){});}else{window.open("https://wa.me/?text="+encodeURIComponent(t),"_blank");}}'
@@ -3479,7 +3480,7 @@ function withPrintToolbar(html, shareText) {
   return /<body[^>]*>/i.test(html) ? html.replace(/<body[^>]*>/i, m => m + bar) : bar + html;
 }
 
-function buildPrintHtml(bodyHtml, shareText) {
+function buildPrintHtml(bodyHtml, shareText, docTitle) {
   bodyHtml = String(bodyHtml).replace(/src="ayat-logo\.png"/g, 'src="' + printLogoUrl() + '"');
   const css =
       '*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
@@ -3513,14 +3514,14 @@ function buildPrintHtml(bodyHtml, shareText) {
     + '@media print{body{padding:0}}';
   return withPrintToolbar('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
     + '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">'
-    + '<style>' + css + '</style></head><body>' + bodyHtml + '</body></html>', shareText);
+    + '<style>' + css + '</style></head><body>' + bodyHtml + '</body></html>', shareText, docTitle);
 }
 
 function openPrintWindow() {
   const printArea = document.getElementById('print-area');
   if (!printArea) return;
-  const _sh = window._printShare; window._printShare = null;
-  const html = buildPrintHtml(printArea.innerHTML, _sh);
+  const _sh = window._printShare, _tt = window._printTitle; window._printShare = null; window._printTitle = null;
+  const html = buildPrintHtml(printArea.innerHTML, _sh, _tt);
 
   // المحاولة الأولى: نافذة منفصلة (تعمل بشكل جيد على الحاسوب)
   const printWin = window.open('', '_blank');
@@ -5182,7 +5183,8 @@ async function printAllEvalCards() {
         }).join('')}
       </tbody>
     </table>`;
-    window._printShare = [`*${document.getElementById('print-title').textContent}*`, (CP.role === 'supervisor' ? `كشف تقييم المشرف: ${CP.full_name||''}` : ''), '']
+    window._printTitle = `تقييم المحفظين - ${_monthTxt}` + (CP.role === 'supervisor' ? ` - ${CP.full_name||''}` : '');
+  window._printShare = [`*${document.getElementById('print-title').textContent}*`, (CP.role === 'supervisor' ? `كشف تقييم المشرف: ${CP.full_name||''}` : ''), '']
     .concat(sorted.map((e,i) => `${i+1}. ${(e.teacher&&e.teacher.full_name)||'—'} — ${e.total_score||0}/${evMax(e.eval_date)} (${evGrade(e.total_score, e.eval_date)})`)).filter((x,i)=>x!==''||i===2).join('\n') + '\n\nبارك الله في جهودكم 🌿';
   openPrintWindow();
 }
