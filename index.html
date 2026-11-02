@@ -4901,11 +4901,22 @@ function updateEvalTotal() {
   if (el) el.textContent = `${total}/${evMax(d)}`;
 }
 
+// المشرف لا يقرأ حسابات المحفظين (RLS)، فنأخذ أسماءهم من الحلقات حتى لا تظهر فارغة في السجل والرسائل والطباعة
+async function fillEvTeacherNames(rows) {
+  const list = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+  if (!list.some(e => !(e.teacher && e.teacher.full_name))) return;
+  try {
+    const { data: cs } = await sb.from('circles').select('teacher_id,teacher_name');
+    const m = {}; (cs || []).forEach(c => { if (c.teacher_id && c.teacher_name && !m[c.teacher_id]) m[c.teacher_id] = c.teacher_name; });
+    list.forEach(e => { if (!(e.teacher && e.teacher.full_name) && m[e.teacher_id]) e.teacher = { full_name: m[e.teacher_id] }; });
+  } catch (e) {}
+}
 async function loadEvals() {
   const _n = document.getElementById('eval-notice'); if (_n) _n.innerHTML = periodNoticeHtml() + evNewItemsNoticeHtml();
   let q = sb.from('teacher_evaluations').select('*,teacher:profiles!teacher_evaluations_teacher_id_fkey(full_name)').order('eval_date',{ascending:false});
   if (CP.role === 'supervisor') q = q.eq('evaluator_id', CU.id);
   const { data } = await q;
+  await fillEvTeacherNames(data);
   const b = document.getElementById('eval-body');
   b.innerHTML = data?.length ? data.map(e=>`<tr>
     <td>
@@ -5031,6 +5042,7 @@ async function printEvalCard(evalId) {
     .select('*,teacher:profiles!teacher_evaluations_teacher_id_fkey(full_name)')
     .eq('id', evalId).single();
   if (!evals) return;
+  await fillEvTeacherNames(evals);
 
   const criteria = [
     ['الالتزام بخطة الحفظ والمراجعة', evals.memorization_plan],
@@ -5096,6 +5108,7 @@ async function printAllEvalCards() {
     .select('*,teacher:profiles!teacher_evaluations_teacher_id_fkey(full_name)')
     .order('total_score',{ascending:false});
   if (!data?.length) { alert('لا توجد تقييمات'); return; }
+  await fillEvTeacherNames(data);
 
   // أحدث تقييم لكل محفظ فقط
   const latest = {};
@@ -5108,18 +5121,18 @@ async function printAllEvalCards() {
     <table style="width:100%;border-collapse:collapse;margin-top:10px">
       <thead>
         <tr style="background:#0c2424;color:white">
-          <th style="padding:10px;text-align:right;font-size:12px">الترتيب</th>
-          <th style="padding:10px;text-align:right;font-size:12px">المحفظ</th>
-          <th style="padding:10px;text-align:center;font-size:12px">خطة الحفظ</th>
-          <th style="padding:10px;text-align:center;font-size:12px">التوصيات</th>
-          <th style="padding:10px;text-align:center;font-size:12px">أداء الطالب</th>
-          <th style="padding:10px;text-align:center;font-size:12px">التقرير الأسبوعي</th>
-          <th style="padding:10px;text-align:center;font-size:12px">المواعيد</th>
-          <th style="padding:10px;text-align:center;font-size:12px">إدارة الحلقة</th>
-          <th style="padding:10px;text-align:center;font-size:12px">القيمة التربوية</th>
-          <th style="padding:10px;text-align:center;font-size:12px">تحفيز الفرسان</th>
-          <th style="padding:10px;text-align:center;font-size:14px;font-weight:900">المجموع</th>
-          <th style="padding:10px;text-align:center;font-size:12px">التقدير</th>
+          <th style="padding:6px 2px;text-align:right;font-size:12px">الترتيب</th>
+          <th style="padding:6px 2px;text-align:right;font-size:12px">المحفظ</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">خطة الحفظ</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">التوصيات</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">أداء الطالب</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">التقرير الأسبوعي</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">المواعيد</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">إدارة الحلقة</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">القيمة التربوية</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">تحفيز الفرسان</th>
+          <th style="padding:6px 2px;text-align:center;font-size:14px;font-weight:900">المجموع</th>
+          <th style="padding:6px 2px;text-align:center;font-size:12px">التقدير</th>
         </tr>
       </thead>
       <tbody>
@@ -5129,18 +5142,18 @@ async function printAllEvalCards() {
           const grade = evGrade(total, e.eval_date);
           const medal = i<3 ? svgMedal(i,24) : '';
           return `<tr style="background:${i%2===0?'#f5f5f5':'white'}">
-            <td style="padding:10px;font-size:14px;font-weight:900;text-align:center">${medal} ${i+1}</td>
-            <td style="padding:10px;font-size:13px;font-weight:700">${e.teacher?.full_name||'—'}</td>
-            <td style="padding:10px;text-align:center;font-size:13px">${e.memorization_plan||0}/10</td>
-            <td style="padding:10px;text-align:center;font-size:13px">${e.review_plan||0}/10</td>
-            <td style="padding:10px;text-align:center;font-size:13px">${e.circle_record||0}/10</td>
-            <td style="padding:10px;text-align:center;font-size:13px">${e.student_errors||0}/10</td>
-            <td style="padding:10px;text-align:center;font-size:13px">${e.circle_appearance||0}/10</td>
-            <td style="padding:10px;text-align:center;font-size:13px">${e.parent_communication||0}/10</td>
-            <td style="padding:10px;text-align:center;font-size:13px">${e.value_engagement!=null?e.value_engagement+'/10':'—'}</td>
-            <td style="padding:10px;text-align:center;font-size:13px">${e.heroes_motivation!=null?e.heroes_motivation+'/10':'—'}</td>
-            <td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:${color};white-space:nowrap">${total}/${evMax(e.eval_date)}</td>
-            <td style="padding:10px;text-align:center;font-size:12px;font-weight:700;color:${color}">${grade}</td>
+            <td style="padding:6px 2px;font-size:14px;font-weight:900;text-align:center">${medal} ${i+1}</td>
+            <td style="padding:6px 2px;font-size:11px;font-weight:700">${e.teacher?.full_name||'—'}</td>
+            <td style="padding:6px 2px;text-align:center;font-size:11px">${e.memorization_plan||0}/10</td>
+            <td style="padding:6px 2px;text-align:center;font-size:11px">${e.review_plan||0}/10</td>
+            <td style="padding:6px 2px;text-align:center;font-size:11px">${e.circle_record||0}/10</td>
+            <td style="padding:6px 2px;text-align:center;font-size:11px">${e.student_errors||0}/10</td>
+            <td style="padding:6px 2px;text-align:center;font-size:11px">${e.circle_appearance||0}/10</td>
+            <td style="padding:6px 2px;text-align:center;font-size:11px">${e.parent_communication||0}/10</td>
+            <td style="padding:6px 2px;text-align:center;font-size:11px">${e.value_engagement!=null?e.value_engagement+'/10':'—'}</td>
+            <td style="padding:6px 2px;text-align:center;font-size:11px">${e.heroes_motivation!=null?e.heroes_motivation+'/10':'—'}</td>
+            <td style="padding:6px 2px;text-align:center;font-size:12px;font-weight:900;color:${color};white-space:nowrap">${total}/${evMax(e.eval_date)}</td>
+            <td style="padding:6px 2px;text-align:center;font-size:12px;font-weight:700;color:${color}">${grade}</td>
           </tr>`;
         }).join('')}
       </tbody>
