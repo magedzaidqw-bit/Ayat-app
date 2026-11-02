@@ -5104,9 +5104,11 @@ async function printEvalCard(evalId) {
 
 // طباعة التقرير الإجمالي للجروب
 async function printAllEvalCards() {
-  const { data } = await sb.from('teacher_evaluations')
+  let _q = sb.from('teacher_evaluations')
     .select('*,teacher:profiles!teacher_evaluations_teacher_id_fkey(full_name)')
     .order('total_score',{ascending:false});
+  if (CP.role === 'supervisor') _q = _q.eq('evaluator_id', CU.id);
+  const { data } = await _q;
   if (!data?.length) { alert('لا توجد تقييمات'); return; }
   await fillEvTeacherNames(data);
 
