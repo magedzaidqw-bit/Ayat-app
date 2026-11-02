@@ -1913,7 +1913,7 @@ function buildModals() {
 
   <div class="mo" id="m-eval"><div class="modal"><div class="mh"><h3>تقييم محفظ</h3><button class="mc" onclick="closeM('m-eval')">✕</button></div>
   <div class="mb">
-    <div class="fg"><label>المحفظ</label><select id="ev-teacher"><option value="">اختر</option></select></div>
+    <div class="fg"><label>المحفظ</label><select id="ev-teacher" onchange="loadEvWeeklyLog()"><option value="">اختر</option></select></div>
     <div class="fgrid">
       <div class="fg"><label>شهر التقييم</label>
         <select id="ev-month" onchange="onEvPeriodChange()">${['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'].map((n,i)=>`<option value="${i+1}">${n}</option>`).join('')}</select>
@@ -4836,6 +4836,61 @@ function onEvPeriodChange() {
   ['ev-s7-wrap','ev-s8-wrap'].forEach(id => { const w = document.getElementById(id); if (w) w.style.display = evHasValue(getEvDate()) ? '' : 'none'; });
   const nn = document.getElementById('ev-new-note'); if (nn) nn.style.display = evHasValue(getEvDate()) ? 'none' : '';
   updateEvalTotal();
+  loadEvWeeklyLog();
+}
+// سجل التقرير الأسبوعي للمحفظ المختار في شهر التقييم (يظهر داخل نافذة التقييم ليكون تقييم بند التقرير الأسبوعي مبنيًا على بيانات)
+let _evWkTok = 0;
+async function loadEvWeeklyLog() {
+  const wrap = document.getElementById('ev-s4-wrap'); if (!wrap) return;
+  let box = document.getElementById('ev-wk-log');
+  if (!box) { box = document.createElement('div'); box.id = 'ev-wk-log'; box.style.cssText = 'background:#fff;border:1.5px solid var(--gray2);border-right:5px solid #25D366;border-radius:12px;padding:10px 12px;margin:-4px 0 14px;font-size:12px;line-height:1.9'; wrap.insertAdjacentElement('afterend', box); }
+  const tid = v('ev-teacher'), date = getEvDate();
+  const tok = ++_evWkTok;
+  if (!tid || !date) { box.innerHTML = '<div style="color:var(--mid)">📨 اختر المحفظ ليظهر سجل تقريره الأسبوعي لهذا الشهر.</div>'; return; }
+  box.innerHTML = '<div style="color:var(--mid)">⏳ جارٍ تحميل سجل التقرير الأسبوعي...</div>';
+  try {
+    const [y, m] = date.split('-').map(Number);
+    const weeks = [];
+    { const fd = new Date(y, m - 1, 1); while (fd.getDay() !== 0) fd.setDate(fd.getDate() + 1);
+      for (const d = new Date(fd); d.getMonth() === m - 1; d.setDate(d.getDate() + 7)) {
+        const e = new Date(d); e.setDate(e.getDate() + 3);
+        weeks.push({ key: ymdLocal(d), end: ymdLocal(e), sat: (() => { const s = new Date(d); s.setDate(s.getDate() + 6); return ymdLocal(s); })(),
+          label: d.getMonth() === e.getMonth() ? `${d.getDate()} إلى ${e.getDate()} ${EV_MONTHS_AR[e.getMonth()]}` : `${d.getDate()} ${EV_MONTHS_AR[d.getMonth()]} إلى ${e.getDate()} ${EV_MONTHS_AR[e.getMonth()]}` }); } }
+    if (!weeks.length) { box.innerHTML = '<div style="color:var(--mid)">لا توجد أسابيع دوام كاملة في هذا الشهر.</div>'; return; }
+    const { data: circ } = await sb.from('circles').select('id,is_official').or('teacher_id.eq.'+tid+',co_teacher_id.eq.'+tid);
+    const cids = (circ || []).filter(c => c.is_official !== false).map(c => c.id);
+    if (!cids.length) { box.innerHTML = '<div style="color:var(--mid)">لا توجد حلقة رسمية مرتبطة بهذا المحفظ.</div>'; return; }
+    const stu = await fetchAllRows(() => sb.from('students').select('id,circle_id').in('circle_id', cids));
+    const sids = stu.map(s => s.id);
+    const circleN = {}; stu.forEach(s => circleN[s.circle_id] = (circleN[s.circle_id] || 0) + 1);
+    const from = weeks[0].key, to = weeks[weeks.length - 1].sat;
+    const prev = new Date(from + 'T00:00:00'); prev.setDate(prev.getDate() - 1);
+    const [att, sends] = await Promise.all([
+      sids.length ? fetchAllRows(() => sb.from('attendance').select('date,status,student_id').in('student_id', sids).eq('status', 'present').gte('date', from).lte('date', to)) : Promise.resolve([]),
+      fetchAllRows(() => sb.from('weekly_report_sends').select('circle_id,student_id,sent_count,week_start').in('circle_id', cids).gte('week_start', ymdLocal(prev)).lte('week_start', weeks[weeks.length - 1].key))
+    ]);
+    if (tok !== _evWkTok) return;
+    const present = {}; att.forEach(r => { const dd = new Date(r.date + 'T00:00:00'); dd.setDate(dd.getDate() - dd.getDay()); (present[ymdLocal(dd)] = present[ymdLocal(dd)] || new Set()).add(r.student_id); });
+    const acc = {}; sends.forEach(r => { const dt = new Date(r.week_start + 'T00:00:00'); if (dt.getDay() === 6) dt.setDate(dt.getDate() + 1); const k = ymdLocal(dt); const o = ((acc[k] = acc[k] || {})[r.circle_id] = acc[k][r.circle_id] || { ids: new Set(), legacy: 0 }); if (r.student_id) o.ids.add(r.student_id); else o.legacy += (r.sent_count || 0); });
+    const sentN = k => { let tot = 0; const a = acc[k] || {}; Object.keys(a).forEach(cid => { tot += Math.min(circleN[cid] || Infinity, a[cid].ids.size + a[cid].legacy); }); return tot; };
+    const today = ymdLocal(new Date());
+    let rows = '', ratios = [];
+    weeks.forEach((w, i) => {
+      const D = (present[w.key] || new Set()).size, n = sentN(w.key);
+      let cell, color = 'var(--mid)';
+      if (w.end > today) cell = '⏳ الأسبوع لم ينتهِ بعد';
+      else if (D === 0 && n === 0) cell = '— لا حضور في هذا الأسبوع';
+      else if (D > 0 && n >= D) { cell = `✔ أرسل لجميع الحاضرين (${Math.min(n, D)} من ${D})`; color = '#1d6b3a'; ratios.push(1); }
+      else if (n > 0) { cell = `⚠️ أرسل لـ ${n}${D ? ' من ' + D : ''}${D ? ' (ينقص ' + (D - n) + ')' : ''}`; color = '#c9962e'; ratios.push(D ? Math.min(1, n / D) : 1); }
+      else { cell = `✘ لم يُرسل (حضر ${D} طالب)`; color = '#a3262b'; ratios.push(0); }
+      rows += `<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-top:1px dashed var(--gray2)"><span>الأسبوع ${i + 1} — ${w.label}</span><strong style="color:${color};text-align:left">${cell}</strong></div>`;
+    });
+    const avg = ratios.length ? Math.round(ratios.reduce((a, b) => a + b, 0) / ratios.length * 100) : null;
+    const sug = avg === null ? '' : `<div style="margin-top:6px;padding:6px 8px;background:#f6f2e6;border-radius:8px;font-weight:700">📊 متوسط الالتزام في الأسابيع المنتهية: ${avg}% — الدرجة المقترحة لهذا البند تقريبًا: ${Math.max(1, Math.round(avg / 10))} من 10 <span style="font-weight:600;color:var(--mid)">(للاسترشاد، والقرار لك)</span></div>`;
+    box.innerHTML = `<div style="font-weight:800;margin-bottom:4px">📨 سجل التقرير الأسبوعي — ${EV_MONTHS_AR[m - 1]} ${y}</div>${rows}${sug}`;
+  } catch (e) {
+    if (tok === _evWkTok) box.innerHTML = '<div style="color:#a3262b">تعذّر تحميل سجل التقرير الأسبوعي: ' + escapeHtml(e.message || String(e)) + '</div>';
+  }
 }
 function updateEvalTotal() {
   const d = getEvDate();
