@@ -4540,7 +4540,7 @@ async function loadActivity() {
       const cids = sc.filter(x => x.supervisor_id === s.id && (!myCircleIds || myCircleIds.includes(x.circle_id))).map(x => x.circle_id);
       const tset = [...new Set(cids.map(c => circleTeacher[c]).filter(Boolean))];
       const mine = evs.filter(e => e.evaluator_id === s.id);
-      const doneSet = new Set(mine.filter(e => e.eval_date >= monthStart).map(e => e.teacher_id));
+      const doneSet = new Set(mine.filter(e => e.eval_date >= evStart && e.eval_date < evEnd).map(e => e.teacher_id));
       const pending = tset.filter(id => !doneSet.has(id));
       const last = mine.map(e => e.eval_date).sort().pop() || null;
       const level = !tset.length ? 'none' : pending.length === 0 ? 'ok' : doneSet.size === 0 ? 'bad' : 'mid';
@@ -4554,6 +4554,10 @@ async function loadActivity() {
     const supIncomplete = supRows.filter(r => r.level === 'bad' || r.level === 'mid');
     const periodLabel = period === '1' ? 'اليوم' : period === 'month' ? 'هذا الشهر' : `آخر ${period} أيام`;
     const monthName = EV_MONTHS_AR[now.getMonth()];
+    // الشهر المستحق تقييمه: من يوم 28 الشهر الجاري، وقبل ذلك الشهر الماضي (فلا نطالب المشرف بشهر لم يحن تقييمه)
+    const evMDate = now.getDate() >= 28 ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const evStart = ymdLocal(evMDate), evEnd = ymdLocal(new Date(evMDate.getFullYear(), evMDate.getMonth() + 1, 1));
+    const evMonthName = EV_MONTHS_AR[evMDate.getMonth()];
 
     // ===== سجل التقرير الأسبوعي للشهر الحالي: من أرسل ومن لم يرسل في كل أسبوع (يبدأ من جديد مع كل شهر) =====
     const wkWeeks = [];
@@ -4635,15 +4639,15 @@ async function loadActivity() {
         <div class="sc"><div class="si">✅</div><div><div class="sn">${ok.length}</div><div class="sl">محفظ منتظم</div></div></div>
         <div class="sc" style="border-color:var(--gold)"><div class="si" style="background:#fdf1d9">⚠️</div><div><div class="sn">${mid.length}</div><div class="sl">تسجيل ناقص</div></div></div>
         <div class="sc" style="border-color:#a3262b"><div class="si" style="background:#fbe4e4">🚫</div><div><div class="sn">${bad.length}</div><div class="sl">لم يسجّلوا شيئًا</div></div></div>
-        <div class="sc" style="border-color:#14568f"><div class="si" style="background:#e0eefb">🧑‍💼</div><div><div class="sn">${isSup ? (supRows[0] ? supRows[0].pending.length : 0) : supIncomplete.length}</div><div class="sl">${isSup ? 'محفظ بانتظار تقييمك لشهر ' + monthName : 'مشرف لم يكمل تقييم ' + monthName}</div></div></div>
+        <div class="sc" style="border-color:#14568f"><div class="si" style="background:#e0eefb">🧑‍💼</div><div><div class="sn">${isSup ? (supRows[0] ? supRows[0].pending.length : 0) : supIncomplete.length}</div><div class="sl">${isSup ? 'محفظ بانتظار تقييمك لشهر ' + evMonthName : 'مشرف لم يكمل تقييم ' + evMonthName}</div></div></div>
       </div>`;
 
     if (bad.length || supIncomplete.length) {
       html += `<div class="card" style="border-right:5px solid #a3262b"><div class="ch"><h3>🚨 يحتاجون متابعة</h3></div><div class="cb" style="line-height:2">`;
       if (bad.length) html += `<div><strong>محفظون لم يسجّلوا حضورًا ولا حفظًا (${periodLabel}):</strong> ${bad.map(r => escapeHtml(r.t.full_name)).join('، ')}</div>`;
       if (supIncomplete.length) html += isSup
-        ? `<div><strong>محفظون لم تقيّمهم بعد لشهر ${monthName}:</strong> ${supIncomplete[0].pending.map(id => escapeHtml(nameOf(id))).join('، ')}</div>`
-        : `<div><strong>مشرفون لم يكملوا تقييم ${monthName}:</strong> ${supIncomplete.map(r => `${escapeHtml(r.s.full_name)} (${r.pending.length} متبقٍ)`).join('، ')}</div>`;
+        ? `<div><strong>محفظون لم تقيّمهم بعد لشهر ${evMonthName}:</strong> ${supIncomplete[0].pending.map(id => escapeHtml(nameOf(id))).join('، ')}</div>`
+        : `<div><strong>مشرفون لم يكملوا تقييم ${evMonthName}:</strong> ${supIncomplete.map(r => `${escapeHtml(r.s.full_name)} (${r.pending.length} متبقٍ)`).join('، ')}</div>`;
       html += `</div></div>`;
     }
 
@@ -4765,7 +4769,8 @@ async function loadActivity() {
       html += `</div></div>`;
     }
 
-    html += `<div class="card"><div class="ch"><h3>${isSup ? '⭐ تقييمك للمحفظين — ' + monthName : '🧑‍💼 المشرفون — تقييم ' + monthName + ' للمحفظين'}</h3></div><div class="cb"><div class="tw"><table>
+    if (supRows.length && !supIncomplete.length) html += `<div class="card" style="border-right:5px solid #1d6b3a"><div class="cb">✅ ${isSup ? 'أكملت' : 'أكمل جميع المشرفين'} تقييم المحفظين لشهر <strong>${evMonthName}</strong>.</div></div>`;
+    html += `<div class="card"><div class="ch"><h3>${isSup ? '⭐ تقييمك للمحفظين — ' + evMonthName : '🧑‍💼 المشرفون — تقييم ' + evMonthName + ' للمحفظين'}</h3></div><div class="cb"><div class="tw"><table>
       <thead><tr><th>المشرف</th><th>الحلقات</th><th>المحفظون تحت إشرافه</th><th>تم تقييمهم</th><th>لم يُقيَّموا</th><th>آخر تقييم</th><th>الحالة</th></tr></thead><tbody>`;
     supRows.forEach(r => {
       html += `<tr><td><strong>${escapeHtml(r.s.full_name)}</strong></td><td>${r.cids.length}</td><td>${r.tset.length}</td>
@@ -4776,7 +4781,7 @@ async function loadActivity() {
     html += `</tbody></table></div></div></div>
       <div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">✔ حاضر، ✘ غائب، ~ بعذر. 🟢 منتظم = سجّل حضورًا وحفظًا في الفترة، 🟡 ناقص = سجّل أحدهما فقط، 🔴 = لم يسجّل شيئًا. يعتمد الحساب على آخر 30 يومًا كحدٍّ أقصى.<div style="margin-top:4px">📋 التقرير الشهري: ✅ أُرسل = رفعه المحفظ، 📝 مسوّدة = ولّده ولم يضغط إرسال، ⏳/❌ لم يُرسل = لا يوجد له تقرير هذا الشهر (يتحول للأحمر بعد يوم 25).</div></div>`;
 
-    window._actData = { periodLabel, monthName, bad, mid, supIncomplete };
+    window._actData = { periodLabel, monthName, evMonthName, bad, mid, supIncomplete };
     root.innerHTML = html;
   } catch (e) {
     root.innerHTML = emptyDiv('⚠️', 'تعذّر تحميل البيانات: ' + escapeHtml(e.message || String(e)));
@@ -4789,7 +4794,7 @@ function shareActivityWA() {
   L.push('جمعية آيات الخيرية', '');
   if (d.bad.length) L.push(`🔴 *لم يسجّلوا حضورًا ولا حفظًا:*`, d.bad.map(r => '• ' + r.t.full_name).join('\n'), '');
   if (d.mid.length) L.push(`🟡 *تسجيل ناقص:*`, d.mid.map(r => '• ' + r.t.full_name).join('\n'), '');
-  if (d.supIncomplete.length) L.push(`🧑‍💼 *تقييم ${d.monthName} لم يكتمل:*`, d.supIncomplete.map(r => `• ${h(r.s.full_name)} (${r.pending.length} متبقٍ)`).join('\n'), '');
+  if (d.supIncomplete.length) L.push(`🧑‍💼 *تقييم ${d.evMonthName||d.monthName} لم يكتمل:*`, d.supIncomplete.map(r => `• ${h(r.s.full_name)} (${r.pending.length} متبقٍ)`).join('\n'), '');
   if (!d.bad.length && !d.mid.length && !d.supIncomplete.length) L.push('✅ الجميع منتظمون، بارك الله فيكم.');
   else L.push('نرجو استكمال المطلوب في البرنامج، جزاكم الله خيرًا.');
   window.open('https://wa.me/?text=' + encodeURIComponent(L.join('\n')), '_blank');
