@@ -874,6 +874,8 @@ function showAlert(id, msg, type) {
 
 sb.auth.getSession().then(({ data: { session } }) => {
   if (session) { CU = session.user; loadProfile(); }
+  // رابط التسجيل المباشر (من بوت واتساب): ...?register=1 يفتح استمارة تسجيل طالب جديد مباشرة
+  try { if (new URLSearchParams(location.search).get('register') === '1') setTimeout(() => { if (typeof openReg === 'function') openReg(!!session); }, 400); } catch (e) {}
 });
 
 // ===================== نظام البصمة (WebAuthn) =====================
