@@ -4457,6 +4457,10 @@ async function loadActivity() {
     else { const d = new Date(); d.setDate(now.getDate() - (parseInt(period) - 1)); periodFrom = ymdLocal(d); }
     if (periodFrom < fromStr) periodFrom = fromStr; // نجلب آخر 30 يومًا كحدٍّ أقصى
     const monthStart = ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+    // الشهر المستحق تقييمه: من يوم 28 الشهر الجاري، وقبل ذلك الشهر الماضي (فلا نطالب المشرف بشهر لم يحن تقييمه)
+    const evMDate = now.getDate() >= 28 ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const evStart = ymdLocal(evMDate), evEnd = ymdLocal(new Date(evMDate.getFullYear(), evMDate.getMonth() + 1, 1));
+    const evMonthName = EV_MONTHS_AR[evMDate.getMonth()];
     const wkStart = new Date(); wkStart.setDate(wkStart.getDate() - wkStart.getDay());
     const weekStartStr = wkStart.toISOString().split('T')[0]; // نفس صيغة حفظ التقرير الأسبوعي في البرنامج
     const weekStartLocal = ymdLocal(wkStart);
@@ -4554,10 +4558,6 @@ async function loadActivity() {
     const supIncomplete = supRows.filter(r => r.level === 'bad' || r.level === 'mid');
     const periodLabel = period === '1' ? 'اليوم' : period === 'month' ? 'هذا الشهر' : `آخر ${period} أيام`;
     const monthName = EV_MONTHS_AR[now.getMonth()];
-    // الشهر المستحق تقييمه: من يوم 28 الشهر الجاري، وقبل ذلك الشهر الماضي (فلا نطالب المشرف بشهر لم يحن تقييمه)
-    const evMDate = now.getDate() >= 28 ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const evStart = ymdLocal(evMDate), evEnd = ymdLocal(new Date(evMDate.getFullYear(), evMDate.getMonth() + 1, 1));
-    const evMonthName = EV_MONTHS_AR[evMDate.getMonth()];
 
     // ===== سجل التقرير الأسبوعي للشهر الحالي: من أرسل ومن لم يرسل في كل أسبوع (يبدأ من جديد مع كل شهر) =====
     const wkWeeks = [];
