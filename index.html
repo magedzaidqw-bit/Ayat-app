@@ -686,6 +686,8 @@ tbody tr:hover { background:#fbfaf6; }
       <div class="fg"><label>تاريخ الميلاد</label><input type="date" id="rg-sbirth"></div>
     </div>
     <div class="fg"><label>العنوان</label><input type="text" id="rg-area" placeholder="مثال: المدينة، الحي، القطعة"></div>
+    <div class="fg"><label>المركز والحلقة المناسبة لابنك</label><select id="rg-circle"><option value="">جارٍ تحميل الحلقات...</option></select>
+      <div style="font-size:11px;color:var(--mid);margin-top:4px">يُسجَّل ابنك في الحلقة مباشرة. وإن اكتملت الحلقة (15 طالبًا) تُفتح له حلقة ثانية بالمحفظ نفسه في وقت آخر.</div></div>
     <div class="section-sub">👨‍👦 بيانات ولي الأمر</div>
     <div id="rg-parent-box">
       <div class="fg"><label>اسم ولي الأمر</label><input type="text" id="rg-pname" placeholder="الاسم الكامل"></div>
@@ -702,7 +704,7 @@ tbody tr:hover { background:#fbfaf6; }
       <input type="checkbox" id="rg-consent" style="margin-top:6px;width:18px;height:18px;flex-shrink:0">
       <span>لا مانع لدي من ظهور ابني في الصور ومقاطع الفيديو التي قد تُنشر عن أنشطة الجمعية وبرامجها، وأوافق على ذلك بكل طيب خاطر 🤍</span>
     </label>
-    <div style="font-size:11px;color:var(--mid);margin-bottom:12px">لا يكتمل التسجيل إلا بالموافقة أعلاه. سيراجع المشرف الطلب ويحدد حلقة ابنك، وتصلك النتيجة بعد ذلك.</div>
+    <div style="font-size:11px;color:var(--mid);margin-bottom:12px">لا يكتمل التسجيل إلا بالموافقة أعلاه. يُسجَّل ابنك في الحلقة التي اخترتها مباشرة، ويتابعه المشرف.</div>
     <button class="btn-pri" id="rg-btn" onclick="submitReg()">إرسال طلب التسجيل</button>
   </div>
 </div></div>
@@ -5467,6 +5469,20 @@ function openReg(logged) {
   document.getElementById('rg-parent-box').style.display = REG_LOGGED ? 'none' : 'block';
   const b = document.getElementById('rg-btn'); b.disabled = false; b.textContent = 'إرسال طلب التسجيل';
   document.getElementById('m-reg').classList.add('open');
+  loadRegCircles();
+}
+async function loadRegCircles() {
+  const sel = document.getElementById('rg-circle'); if (!sel) return;
+  try {
+    const { data, error } = await sb.rpc('registration_circles');
+    if (error) throw error;
+    const byCenter = {};
+    (data || []).forEach(c => { (byCenter[c.center_name || 'أخرى'] = byCenter[c.center_name || 'أخرى'] || []).push(c); });
+    sel.innerHTML = '<option value="">اختر الحلقة</option>' + Object.keys(byCenter).map(cn =>
+      '<optgroup label="' + h(cn) + '">' + byCenter[cn].map(c => '<option value="' + h(c.circle_id) + '">' + h(c.label || c.circle_name) + (c.schedule ? ' — ' + h(c.schedule) : '') + (c.teacher_name ? ' — ' + h(c.teacher_name) : '') + '</option>').join('') + '</optgroup>').join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">تعذر تحميل الحلقات — حاول لاحقًا</option>';
+  }
 }
 function closeReg() { document.getElementById('m-reg').classList.remove('open'); }
 async function submitReg() {
@@ -5474,6 +5490,7 @@ async function submitReg() {
   const al = m => showAlert('rg-alert', m, 'err');
   const sname = g('rg-sname');
   if (!sname) return al('أدخل اسم الطالب');
+  if (!document.getElementById('rg-circle').value) return al('اختر الحلقة المناسبة لابنك');
   if (!document.getElementById('rg-consent').checked) return al('لا يمكن إتمام التسجيل إلا بالموافقة على ظهور ابنك في الصور (المربع الأخير)');
   const btn = document.getElementById('rg-btn');
   let client = sb, pid, pname, pphone, pcivil = null;
@@ -5504,17 +5521,19 @@ async function submitReg() {
       const { error: pe } = await client.from('profiles').insert({ id: uid, full_name: pname, role: 'parent', phone: pphone, civil_id: pcivil });
       if (pe && !/duplicate|already/i.test(pe.message || '')) throw new Error('تعذر إنشاء حساب ولي الأمر: ' + pe.message);
     }
-    const { error } = await client.from('registration_requests').insert({
+    const { data: ins, error } = await client.from('registration_requests').insert({
+      circle_id: document.getElementById('rg-circle').value,
       parent_id: pid, parent_name: pname, parent_phone: pphone, parent_civil_id: pcivil, parent_relation: g('rg-prel'),
       student_name: sname, student_civil_id: g('rg-scivil') || null, birth_date: g('rg-sbirth') || null, area: g('rg-area') || null,
       photo_consent: true
-    });
+    }).select('id,status,circle_id').single();
     if (error) throw new Error(error.message);
+    const autoOk = ins && ins.status === 'approved';
     if (!REG_LOGGED) { try { await client.auth.signOut(); } catch(e) {} }
     document.getElementById('rg-body').innerHTML = `<div style="text-align:center;padding:24px 8px">
       <div style="font-size:54px;margin-bottom:10px">✅</div>
-      <h3 style="color:var(--gd);font-family:'Amiri',serif;margin-bottom:8px">تم إرسال طلب التسجيل</h3>
-      <p style="color:var(--mid);font-size:13px;line-height:1.9">سيراجع المشرف الطلب ويحدد حلقة ${h(sname)}.${REG_LOGGED ? '' : '<br>بعد القبول ادخل من تبويب "ولي أمر" برقم جوالك وكلمة المرور التي اخترتها.'}</p>
+      <h3 style="color:var(--gd);font-family:'Amiri',serif;margin-bottom:8px">${autoOk ? 'تم تسجيل ' + h(sname) + ' بنجاح' : 'تم إرسال طلب التسجيل'}</h3>
+      <p style="color:var(--mid);font-size:13px;line-height:1.9">${autoOk ? 'تم ربط ابنك بحسابك.' : 'سيراجع المشرف الطلب ويحدد حلقة ' + h(sname) + '.'}${REG_LOGGED ? '' : '<br>ادخل الآن من تبويب "ولي أمر" برقم جوالك وكلمة المرور التي اخترتها.'}</p>
       <button class="btn btn-o" style="margin-top:14px" onclick="closeReg()${REG_LOGGED ? ';loadParent()' : ''}">إغلاق</button></div>`;
   } catch (e) {
     al('❌ ' + (e.message || 'حدث خطأ'));
