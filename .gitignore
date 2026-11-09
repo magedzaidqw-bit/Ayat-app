@@ -1,0 +1,3 @@
+
+# Claude Code local approvals (may contain secrets)
+.claude/settings.local.json
