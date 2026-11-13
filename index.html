@@ -2239,6 +2239,8 @@ async function deleteStudentCivilId(studentId, photoUrl) {
 async function populateModals(id) {
   if (id==='m-circle') { await populateSel('c-teacher','teachers'); const ct = document.getElementById('c-coteacher'); if (ct) ct.innerHTML = '<option value="">— لا يوجد —</option>' + document.getElementById('c-teacher').innerHTML.replace('<option value="">اختر محفظاً</option>',''); }
   if (id==='m-student') {
+    // نحفظ الحلقة المختارة قبل إعادة بناء القائمة حتى لا تُمسح عند تعديل طالب
+    const _keepCircle = editingStudentId ? ((document.getElementById('s-circle')||{}).value || '') : '';
     if (CP.role === 'teacher') {
       // المحفظ يرى حلقاته فقط
       const { data } = await sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).order('name');
@@ -2250,6 +2252,10 @@ async function populateModals(id) {
       }
     } else {
       await populateSel('s-circle','circles');
+    }
+    if (_keepCircle) {
+      const _sel = document.getElementById('s-circle');
+      if (_sel && Array.from(_sel.options).some(o => o.value === _keepCircle)) _sel.value = _keepCircle;
     }
   }
   if (id==='m-memo') { populateSurahSelects(); }
